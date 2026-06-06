@@ -1,0 +1,37 @@
+# Entornos virtuales
+venv/
+.venv/
+env/
+.env_folder/
+env.bak/
+.venv.bak/
+
+# Variables de entorno (¡CRUCIAL no subir!)
+.env
+.env.local
+.env.*.local
+
+# Archivos de caché de Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs temporales
+*.log
+logs/
+.logs/
+
+# Distribución / Empaquetado
+dist/
+build/
+*.egg-info/
+
+# Entornos de desarrollo / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
