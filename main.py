@@ -28,9 +28,9 @@ logger = logging.getLogger("main")
 load_dotenv()
 
 # Variables de configuración
-RCON_HOST = os.getenv("RCON_HOST", "127.0.0.1")
-RCON_PORT_STR = os.getenv("RCON_PORT", "19132")
-RCON_PASS = os.getenv("RCON_PASS")
+# Configuración de la consola del BDS (reemplaza RCON, que no es soportado por Bedrock)
+SCREEN_SESSION_NAME = os.getenv("SCREEN_SESSION_NAME", "minecraft")
+SERVER_LOG_FILE = os.getenv("SERVER_LOG_FILE", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 LOG_FILE_PATH = os.getenv("LOG_FILE_PATH")
 COMMAND_KEYWORD = os.getenv("COMMAND_KEYWORD", "!oraculo")
@@ -51,20 +51,14 @@ DIVINE_FAVOR_PLAYERS: List[str] = [
 ]
 
 # Validaciones iniciales
-if not RCON_PASS:
-    logger.critical("Falta la variable RCON_PASS en el archivo .env. Saliendo...")
-    sys.exit(1)
 if not OPENAI_API_KEY:
     logger.critical("Falta la variable OPENAI_API_KEY en el archivo .env. Saliendo...")
     sys.exit(1)
+if not SERVER_LOG_FILE:
+    logger.critical("Falta la variable SERVER_LOG_FILE en el archivo .env. Saliendo...")
+    sys.exit(1)
 if not LOG_FILE_PATH:
     logger.warning("LOG_FILE_PATH no configurado. El monitor de logs estará desactivado (solo se usará el webhook).")
-
-try:
-    RCON_PORT = int(RCON_PORT_STR)
-except ValueError:
-    logger.critical(f"El puerto RCON '{RCON_PORT_STR}' no es un número válido. Saliendo...")
-    sys.exit(1)
 
 try:
     COOLDOWN_SECONDS = int(COOLDOWN_SECONDS_STR)
@@ -94,7 +88,10 @@ global_wrath: int = 0
 
 # Inicializar servicios
 logger.info("Inicializando clientes y servicios...")
-rcon_client = RCONClient(host=RCON_HOST, port=RCON_PORT, password=RCON_PASS)
+rcon_client = RCONClient(
+    screen_name=SCREEN_SESSION_NAME,
+    log_file=SERVER_LOG_FILE,
+)
 ai_handler = AIHandler(api_key=OPENAI_API_KEY, model=OPENAI_MODEL)
 
 # ---- SISTEMA DE DEVOCIÓN DINÁMICA ----
@@ -214,7 +211,7 @@ CHAT_EXTRACT_PATTERN = re.compile(
 )
 
 # Coordenadas numéricas generales (locate de estructura)
-COORDS_PATTERN = re.compile(r"(-?\d+)\s*,\s*(~|-?\d+)\s*,\s*(-?\d+)")
+COORDS_PATTERN = re.compile(r"block\s+(-?\d+)\s*,\s*(?:\(y\?\)|-?\d+|~)\s*,\s*(-?\d+)\s*\(\s*(\d+)\s*blocks\s+away\s*\)", re.IGNORECASE)
 
 # Coordenadas del jugador (teleport)
 PLAYER_COORDS_PATTERN = re.compile(r"(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)")
@@ -266,11 +263,14 @@ def check_for_insults(text: str) -> bool:
             return True
     return False
 
-def get_direction_and_distance(p_x: float, p_z: float, s_x: float, s_z: float) -> tuple[float, str]:
-    """Calcula la distancia 2D y dirección cardinal de jugador a estructura."""
-    dx = s_x - p_x
-    dz = s_z - p_z
-    distance = math.sqrt(dx**2 + dz**2)
+def calculate_relative_position(player_x: float, player_z: float, target_x: float, target_z: float) -> dict:
+    """Calcula la distancia y dirección cardinal de jugador a estructura."""
+    distance = int(round(math.dist((player_x, player_z), (target_x, target_z))))
+    
+    # En Minecraft Z es positivo hacia el sur y negativo hacia el norte
+    # X es positivo hacia el este y negativo hacia el oeste
+    dx = target_x - player_x
+    dz = target_z - player_z
 
     angle = math.degrees(math.atan2(dz, dx))
     if angle < 0:
@@ -293,7 +293,7 @@ def get_direction_and_distance(p_x: float, p_z: float, s_x: float, s_z: float) -
     else:
         direction = "Este"
 
-    return distance, direction
+    return {"distance": distance, "direction": direction}
 
 def check_cooldown(player: str) -> Optional[int]:
     """Calcula el cooldown restante considerando la devoción del jugador."""
@@ -338,7 +338,7 @@ def execute_smite(player: str, reason_outcome: str, target_item: str = "") -> No
         outcome=reason_outcome,
         devocion_rango=nueva_data["rango"]
     )
-    final_message = f"§6[§5Oráculo§6] §c{mystical_message} §7(Devoción: {nueva_data['puntos']}, Rango: {nueva_data['rango']})"
+    final_message = f"§6[§5Oráculo§6] §c{mystical_message}"
 
     # 3. Anunciar globalmente a todos los jugadores
     try:
@@ -396,7 +396,7 @@ def process_item_request(player: str, item: str) -> None:
         response = ai_handler.generate_item_response(
             player_name=player, item=item, outcome="success", devocion_rango=nueva_data["rango"]
         )
-        final_message = f"§6[§5Oráculo§6] §a{response} §e(+10 Devoción, Rango: {nueva_data['rango']})"
+        final_message = f"§6[§5Oráculo§6] §a{response}"
         
         try:
             rcon_client.send_tellraw("@a", final_message)
@@ -446,7 +446,7 @@ def process_item_request(player: str, item: str) -> None:
                 response = ai_handler.generate_item_response(
                     player_name=player, item=item, outcome="punished", effect=effect_name, devocion_rango=nueva_data["rango"]
                 )
-                final_message = f"§6[§5Oráculo§6] §c{response} §e(-20 Devoción, Rango: {nueva_data['rango']})"
+                final_message = f"§6[§5Oráculo§6] §c{response}"
                 try:
                     rcon_client.send_tellraw("@a", final_message)
                 except Exception:
@@ -461,7 +461,7 @@ def process_item_request(player: str, item: str) -> None:
             response = ai_handler.generate_item_response(
                 player_name=player, item=item, outcome="fail", devocion_rango=nueva_data["rango"]
             )
-            final_message = f"§6[§5Oráculo§6] §d{response} §e(-5 Devoción, Rango: {nueva_data['rango']})"
+            final_message = f"§6[§5Oráculo§6] §d{response}"
             try:
                 rcon_client.send_tellraw("@a", final_message)
             except Exception:
@@ -492,7 +492,8 @@ def process_command(player: str, structure: str) -> None:
 
     # Teleport para posición de jugador
     try:
-        tp_response = rcon_client.execute_command(f"teleport \"{player}\" ~ ~ ~")
+        cmd = f"execute as \"{player}\" at @s run teleport @s ~ ~ ~"
+        tp_response = rcon_client.execute_command(cmd)
         match_p_coords = PLAYER_COORDS_PATTERN.search(tp_response)
         if match_p_coords:
             p_x = float(match_p_coords.group(1))
@@ -505,8 +506,16 @@ def process_command(player: str, structure: str) -> None:
     try:
         cmd = f"execute as \"{player}\" at @s run locate structure {structure}"
         rcon_response = rcon_client.execute_command(cmd)
+        
+        # Si a futuro se migra el sistema de RCON (screen) a llamadas HTTP (Behavior Pack API):
+        # if hasattr(rcon_response, "status_code") and rcon_response.status_code != 200:
+        #     logger.error(f"El puente de Bedrock rechazó el comando. Status: {rcon_response.status_code}, Body: {rcon_response.text}")
+        #     return False
+            
+        logger.info(f"Respuesta cruda de Bedrock: '{rcon_response}'")
+        
     except Exception as e:
-        logger.error(f"Error al ejecutar locate en RCON: {e}")
+        logger.error(f"Error CRÍTICO de ejecución o conexión al buscar estructura: {e}", exc_info=True)
         try:
             rcon_client.send_tellraw(
                 "@a",
@@ -514,23 +523,28 @@ def process_command(player: str, structure: str) -> None:
             )
         except Exception:
             pass
-        return
+        return False
 
     # Extraer coordenadas de estructura
     match_coords = COORDS_PATTERN.search(rcon_response)
     if match_coords:
         s_x_str = match_coords.group(1)
-        s_y_str = match_coords.group(2)
-        s_z_str = match_coords.group(3)
+        s_z_str = match_coords.group(2)
+        dist_str = match_coords.group(3)
         try:
             s_x = float(s_x_str)
             s_z = float(s_z_str)
+            distance = float(dist_str)
         except ValueError:
             pass
 
     # Calcular rumbo/distancia
     if p_x is not None and p_z is not None and s_x is not None and s_z is not None:
-        distance, direction = get_direction_and_distance(p_x, p_z, s_x, s_z)
+        rel_pos = calculate_relative_position(p_x, p_z, s_x, s_z)
+        direction = rel_pos["direction"]
+        # Usamos la distancia exacta que reportó Bedrock, si falló el regex, calculamos nosotros
+        if distance is None:
+            distance = rel_pos["distance"]
 
     # Otorgar o restar devoción según si se encontró la estructura
     if match_coords:
@@ -544,23 +558,15 @@ def process_command(player: str, structure: str) -> None:
         increase_wrath(1)
 
     # Generar respuesta
-    x_arg = s_x_str if (REVEAL_EXACT_COORDS and match_coords) else None
-    y_arg = s_y_str if (REVEAL_EXACT_COORDS and match_coords) else None
-    z_arg = s_z_str if (REVEAL_EXACT_COORDS and match_coords) else None
-
     mystical_message = ai_handler.generate_response(
         player_name=player,
         structure=structure,
-        x=x_arg,
-        y=y_arg,
-        z=z_arg,
         distance=distance,
         direction=direction,
-        reveal_exact_coords=REVEAL_EXACT_COORDS,
         devocion_rango=nueva_data["rango"]
     )
 
-    final_message = f"§6[§5Oráculo§6] §d{mystical_message} §e(Rango: {nueva_data['rango']})"
+    final_message = f"§6[§5Oráculo§6] §d{mystical_message}"
 
     if "{player}" in RESPONSE_TARGET_TEMPLATE:
         target = RESPONSE_TARGET_TEMPLATE.format(player=player)
@@ -589,14 +595,20 @@ def process_ofrenda_request(player: str, item: str) -> None:
         rarity_text = "ofrenda modesta"
         
     try:
-        rcon_response = rcon_client.execute_command(f"clear \"{player}\" {item} 1")
+        rcon_response = rcon_client.execute_command(f"clear \"{player}\" {item} 0 1")
         rcon_lower = rcon_response.lower()
         if any(x in rcon_lower for x in ["no items", "could not", "error", "syntax", "unknown", "failed"]):
-            logger.info(f"Ofrenda fallida para '{player}': no posee '{item}' o ítem inválido. RCON: {rcon_response}")
-            rcon_client.send_tellraw(
-                player,
-                f"§6[§5Oráculo§6] §cNo posees '{item}' en tu inventario para ofrecerlo en sacrificio."
+            logger.info(f"Ofrenda falsa de '{player}': intentó ofrendar '{item}' pero no lo posee. RCON: {rcon_response}")
+            
+            # Castigo por ofrenda falsa
+            response_msg = ai_handler.generate_item_response(
+                player_name=player,
+                item=item,
+                outcome="fake_offering",
+                devocion_rango=get_player_devocion_data(player)["rango"]
             )
+            final_message = f"§6[§5Oráculo§6] §c{response_msg}"
+            rcon_client.send_tellraw("@a", final_message)
             return
             
         # Ofrenda exitosa!
@@ -615,7 +627,7 @@ def process_ofrenda_request(player: str, item: str) -> None:
             outcome="success",
             devocion_rango=nueva_data["rango"]
         )
-        final_message = f"§6[§5Oráculo§6] §a{response} §e(+{puntos_ganados} Devoción, Rango: {nueva_data['rango']})"
+        final_message = f"§6[§5Oráculo§6] §a{response}"
         rcon_client.send_tellraw("@a", final_message)
         
     except Exception as e:
@@ -625,102 +637,53 @@ def process_ofrenda_request(player: str, item: str) -> None:
         except Exception:
             pass
 
-def process_clima_request(player: str, clima_tipo: str) -> None:
-    """Cambia el clima si el jugador tiene suficiente devoción."""
+def process_miracle_request(player: str, miracle_type: str) -> None:
+    """Maneja los milagros ambientales (clima y tiempo) mediante devoción."""
     data = get_player_devocion_data(player)
-    if data["puntos"] < 150 and player not in DIVINE_FAVOR_PLAYERS:
-        try:
-            rcon_client.send_tellraw(
-                player,
-                f"§6[§5Oráculo§6] §cTu devoción ({data['puntos']}/150) es insuficiente para alterar el clima."
-            )
-        except Exception:
-            pass
-        return
-
-    clima_map = {
-        "sol": "clear", "clear": "clear", "despejado": "clear",
-        "lluvia": "rain", "rain": "rain",
-        "tormenta": "thunder", "thunder": "thunder", "tempestad": "thunder"
-    }
     
-    cmd_weather = clima_map.get(clima_tipo.lower())
-    if not cmd_weather:
-        try:
-            rcon_client.send_tellraw(player, "§6[§5Oráculo§6] §cClimas permitidos: sol, lluvia, tormenta.")
-        except Exception:
-            pass
-        return
-        
-    try:
-        rcon_client.execute_command(f"weather {cmd_weather}")
-        try:
-            rcon_client.execute_command(f"execute at \"{player}\" run playsound ambient.weather.thunder @a")
-            rcon_client.execute_command(f"execute at \"{player}\" run particle minecraft:conduit_particle ~ ~2 ~")
-        except Exception:
-            pass
-            
+    if data["puntos"] >= 150 or player in DIVINE_FAVOR_PLAYERS:
+        # Éxito
         costo = -25
         nueva_data = update_player_devocion(player, costo)
         
-        response = ai_handler.generate_item_response(
-            player_name=player,
-            item=f"el clima a {clima_tipo}",
-            outcome="success",
-            devocion_rango=nueva_data["rango"]
+        try:
+            if miracle_type in ["day", "night"]:
+                rcon_client.execute_command(f"time set {miracle_type}")
+                rcon_client.execute_command(f"execute at \"{player}\" run playsound mob.elder_guardian.curse @a")
+                rcon_client.execute_command(f"execute at \"{player}\" run particle minecraft:spore_blossom_shower_particle ~ ~2 ~")
+            elif miracle_type in ["clear", "rain", "thunder"]:
+                rcon_client.execute_command(f"weather {miracle_type}")
+                rcon_client.execute_command(f"execute at \"{player}\" run playsound ambient.weather.thunder @a")
+                rcon_client.execute_command(f"execute at \"{player}\" run particle minecraft:conduit_particle ~ ~2 ~")
+        except Exception as e:
+            logger.error(f"Error al ejecutar comandos de milagro en RCON: {e}")
+            
+        response = ai_handler.generate_miracle_response(
+            player_name=player, miracle_type=miracle_type, success=True, devocion_rango=nueva_data["rango"]
         )
-        final_msg = f"§6[§5Oráculo§6] §b{response} §e({costo} Devoción, Rango: {nueva_data['rango']})"
-        rcon_client.send_tellraw("@a", final_msg)
-    except Exception as e:
-        logger.error(f"Error al cambiar clima: {e}")
-
-def process_tiempo_request(player: str, tiempo_tipo: str) -> None:
-    """Cambia la hora del día si el jugador tiene suficiente devoción."""
-    data = get_player_devocion_data(player)
-    if data["puntos"] < 150 and player not in DIVINE_FAVOR_PLAYERS:
-        try:
-            rcon_client.send_tellraw(
-                player,
-                f"§6[§5Oráculo§6] §cTu devoción ({data['puntos']}/150) es insuficiente para alterar el tiempo celestial."
-            )
-        except Exception:
-            pass
-        return
-
-    tiempo_map = {
-        "dia": "day", "day": "day", "sol": "day",
-        "noche": "night", "night": "night", "oscuridad": "night"
-    }
-    
-    cmd_time = tiempo_map.get(tiempo_tipo.lower())
-    if not cmd_time:
-        try:
-            rcon_client.send_tellraw(player, "§6[§5Oráculo§6] §cTiempos permitidos: dia, noche.")
-        except Exception:
-            pass
-        return
+        final_msg = f"§6[§5Oráculo§6] §b{response}"
         
-    try:
-        rcon_client.execute_command(f"time set {cmd_time}")
         try:
-            rcon_client.execute_command(f"execute at \"{player}\" run playsound mob.elder_guardian.curse @a")
-            rcon_client.execute_command(f"execute at \"{player}\" run particle minecraft:spore_blossom_shower_particle ~ ~2 ~")
+            rcon_client.send_tellraw("@a", final_msg)
         except Exception:
             pass
             
-        costo = -25
-        nueva_data = update_player_devocion(player, costo)
-        
-        response = ai_handler.generate_item_response(
-            player_name=player,
-            item=f"el flujo del tiempo celestial hacia la {tiempo_tipo}",
-            outcome="success",
-            devocion_rango=nueva_data["rango"]
+    else:
+        # Fallo
+        try:
+            rcon_client.execute_command(f"execute as \"{player}\" at @s run summon lightning_bolt ^ ^ ^5")
+        except Exception as e:
+            logger.error(f"Error invocando rayo advertencia de milagro: {e}")
+            
+        response = ai_handler.generate_miracle_response(
+            player_name=player, miracle_type=miracle_type, success=False, devocion_rango=data["rango"]
         )
-        final_msg = f"§6[§5Oráculo§6] §b{response} §e({costo} Devoción, Rango: {nueva_data['rango']})"
-        rcon_client.send_tellraw("@a", final_msg)
-    except Exception as e:
-        logger.error(f"Error al cambiar tiempo: {e}")
+        final_msg = f"§6[§5Oráculo§6] §c{response}"
+        
+        try:
+            rcon_client.send_tellraw(player, final_msg)
+        except Exception:
+            pass
 
 def process_riddle_request(player: str) -> None:
     """Genera un acertijo místico para el servidor."""
@@ -798,7 +761,7 @@ def process_answer_request(player: str, answer: str) -> None:
                 outcome="success",
                 devocion_rango=nueva_data["rango"]
             )
-            final_msg = f"§6[§5Oráculo§6] §a{response} §e(+50 Devoción, Rango: {nueva_data['rango']})"
+            final_msg = f"§6[§5Oráculo§6] §a{response}"
             rcon_client.send_tellraw("@a", final_msg)
         except Exception as e:
             logger.error(f"Error al otorgar recompensa de acertijo: {e}")
@@ -810,7 +773,7 @@ def process_answer_request(player: str, answer: str) -> None:
             rcon_client.execute_command(f"execute at \"{player}\" run playsound random.glass @s")
             rcon_client.send_tellraw(
                 player,
-                f"§6[§5Oráculo§6] §cTu respuesta '{answer}' es incorrecta. La divinidad se aleja... (-2 Devoción, Rango: {nueva_data['rango']})"
+                f"§6[§5Oráculo§6] §cTu respuesta '{answer}' es incorrecta. La divinidad se aleja..."
             )
         except Exception:
             pass
@@ -852,47 +815,7 @@ def process_chat_message(player: str, message: str) -> None:
 
     action = tokens[0].lower()
 
-    if action == "quisiera":
-        if len(tokens) < 2:
-            try:
-                rcon_client.send_tellraw(player_clean, "§6[§5Oráculo§6] §cDebes especificar qué deseas pedir.")
-            except Exception:
-                pass
-            return
-        item = tokens[1]
-        process_item_request(player_clean, item)
-
-    elif action == "ofrenda":
-        if len(tokens) < 2:
-            try:
-                rcon_client.send_tellraw(player_clean, "§6[§5Oráculo§6] §cDebes especificar qué deseas ofrendar.")
-            except Exception:
-                pass
-            return
-        item = tokens[1]
-        process_ofrenda_request(player_clean, item)
-
-    elif action in ("clima", "weather"):
-        if len(tokens) < 2:
-            try:
-                rcon_client.send_tellraw(player_clean, "§6[§5Oráculo§6] §cEspecifica el clima: sol, lluvia o tormenta.")
-            except Exception:
-                pass
-            return
-        clima_tipo = tokens[1]
-        process_clima_request(player_clean, clima_tipo)
-
-    elif action in ("tiempo", "time"):
-        if len(tokens) < 2:
-            try:
-                rcon_client.send_tellraw(player_clean, "§6[§5Oráculo§6] §cEspecifica el tiempo: dia o noche.")
-            except Exception:
-                pass
-            return
-        tiempo_tipo = tokens[1]
-        process_tiempo_request(player_clean, tiempo_tipo)
-
-    elif action in ("mision", "riddle", "acertijo"):
+    if action in ("mision", "riddle", "acertijo"):
         process_riddle_request(player_clean)
 
     elif action in ("responder", "respuesta", "solve"):
@@ -906,8 +829,80 @@ def process_chat_message(player: str, message: str) -> None:
         process_answer_request(player_clean, answer)
 
     else:
-        # Por defecto, localizar una estructura
-        process_command(player_clean, action)
+        # Por defecto, localizar una estructura o responder conversacionalmente
+        intent_data = ai_handler.classify_intent(query_clean)
+        intent = intent_data.get("intent", "SEARCH")
+        
+        if intent == "CHAT":
+            # Es un saludo o charla
+            remaining = check_cooldown(player_clean)
+            if remaining is not None:
+                try:
+                    rcon_client.send_tellraw(
+                        player_clean,
+                        f"§6[§5Oráculo§6] §cLas energías cósmicas aún no se alinean. Espera {remaining} segundos."
+                    )
+                except Exception:
+                    pass
+                return
+
+            last_query_times[player_clean] = time.time()
+            devocion_data = get_player_devocion_data(player_clean)
+
+            mystical_message = ai_handler.generate_conversational_response(
+                player_name=player_clean,
+                message=query_clean,
+                devocion_rango=devocion_data["rango"]
+            )
+
+            final_message = f"§6[§5Oráculo§6] §b{mystical_message}"
+
+            if "{player}" in RESPONSE_TARGET_TEMPLATE:
+                target = RESPONSE_TARGET_TEMPLATE.format(player=player_clean)
+            else:
+                target = RESPONSE_TARGET_TEMPLATE
+
+            try:
+                rcon_client.send_tellraw(target, final_message)
+            except Exception as e:
+                logger.error(f"Error al enviar tellraw: {e}")
+        elif intent == "OFFERING":
+            target_item = intent_data.get("target_item")
+            if not target_item:
+                target_item = query_clean.replace("ofrenda", "").strip()
+                if not target_item:
+                    try:
+                        rcon_client.send_tellraw(player_clean, "§6[§5Oráculo§6] §cDebes especificar qué deseas ofrendar.")
+                    except Exception:
+                        pass
+                    return
+            process_ofrenda_request(player_clean, target_item)
+        elif intent == "PETITION":
+            target_item = intent_data.get("target_item")
+            if not target_item:
+                target_item = query_clean.replace("quiero", "").replace("dame", "").replace("quisiera", "").strip()
+                if not target_item:
+                    try:
+                        rcon_client.send_tellraw(player_clean, "§6[§5Oráculo§6] §cDebes especificar qué deseas pedir al Oráculo.")
+                    except Exception:
+                        pass
+                    return
+            process_item_request(player_clean, target_item)
+        elif intent == "MIRACLE":
+            miracle_type = intent_data.get("miracle_type")
+            if not miracle_type:
+                try:
+                    rcon_client.send_tellraw(player_clean, "§6[§5Oráculo§6] §cDebes especificar qué cambio celestial deseas (día, noche, lluvia, etc.).")
+                except Exception:
+                    pass
+                return
+            process_miracle_request(player_clean, miracle_type)
+        else:
+            # Por defecto, localizar una estructura
+            target_structure = intent_data.get("target_structure")
+            if not target_structure:
+                target_structure = query_clean
+            process_command(player_clean, target_structure)
 
 
 def process_server_event(event_type: str, player: str) -> None:

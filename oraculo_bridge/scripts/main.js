@@ -55,36 +55,51 @@ function sendToBot(endpoint, data) {
 }
 
 // ─── Captura de Mensajes del Chat ──────────────────────────────
+// chatSend es una API experimental/pre-release. Requiere que la
+// dependencia apunte a una versión beta de @minecraft/server Y
+// que el servidor tenga habilitadas las Beta APIs.
 
-world.afterEvents.chatSend.subscribe((eventData) => {
-  const playerName = eventData.sender.name;
-  const message = eventData.message;
+if (world.afterEvents.chatSend) {
+  world.afterEvents.chatSend.subscribe((eventData) => {
+    const playerName = eventData.sender.name;
+    const message = eventData.message;
 
-  // Solo reenviar mensajes que comienzan con el prefijo del Oráculo
-  if (message.toLowerCase().startsWith(COMMAND_PREFIX)) {
-    console.warn(
-      `[Oráculo Bridge] Comando detectado de '${playerName}': ${message}`
-    );
+    // Solo reenviar mensajes que comienzan con el prefijo del Oráculo
+    if (message.toLowerCase().startsWith(COMMAND_PREFIX)) {
+      console.warn(
+        `[Oráculo Bridge] Comando detectado de '${playerName}': ${message}`
+      );
 
-    sendToBot("/chat", {
-      player: playerName,
-      message: message,
-      timestamp: Date.now(),
-    });
-  }
-});
+      sendToBot("/chat", {
+        player: playerName,
+        message: message,
+        timestamp: Date.now(),
+      });
+    }
+  });
+} else {
+  console.warn(
+    "[Oráculo Bridge] ⚠ world.afterEvents.chatSend no está disponible. " +
+    "Asegúrate de que @minecraft/server apunte a una versión beta (ej. 2.10.0-beta) " +
+    "y que las Beta APIs estén habilitadas en server.properties."
+  );
+}
 
 // ─── Captura de Conexiones de Jugadores ────────────────────────
 
-world.afterEvents.playerJoin.subscribe((eventData) => {
-  const playerName = eventData.playerName;
-  console.warn(`[Oráculo Bridge] Jugador conectado: ${playerName}`);
+world.afterEvents.playerSpawn.subscribe((eventData) => {
+  // initialSpawn es true solo cuando el jugador entra al servidor por primera vez,
+  // no al reaparecer tras morir o cambiar de dimensión
+  if (eventData.initialSpawn) {
+    const playerName = eventData.player.name;
+    console.warn(`[Oráculo Bridge] Jugador conectado: ${playerName}`);
 
-  sendToBot("/event", {
-    type: "player_join",
-    player: playerName,
-    timestamp: Date.now(),
-  });
+    sendToBot("/event", {
+      type: "player_join",
+      player: playerName,
+      timestamp: Date.now(),
+    });
+  }
 });
 
 // ─── Captura de Desconexiones de Jugadores ─────────────────────
@@ -103,7 +118,11 @@ world.afterEvents.playerLeave.subscribe((eventData) => {
 // ─── Confirmación de Carga ─────────────────────────────────────
 
 system.runTimeout(() => {
+  const chatApiReady = !!world.afterEvents.chatSend;
   console.warn(
-    "[Oráculo Bridge] ✓ Behavior Pack cargado. Escuchando chat y eventos de jugadores..."
+    `[Oráculo Bridge] ✓ Behavior Pack cargado (v1.0.1). ` +
+    `Chat API: ${chatApiReady ? "✓ activa" : "✗ no disponible"}. ` +
+    `Escuchando eventos de jugadores...`
   );
 }, 100);
+
