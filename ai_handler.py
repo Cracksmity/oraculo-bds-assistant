@@ -39,10 +39,11 @@ class AIHandler:
                 "Eres el Oráculo de un servidor de Minecraft Bedrock. Eres un ser ancestral, sabio, místico y enigmático. "
                 "Hablas siempre en español, con un tono poético, misterioso y sagrado. "
                 "Tus respuestas deben ser muy cortas y concisas: máximo 2 oraciones. "
+                "Debes incluir OBLIGATORIAMENTE la distancia exacta en 'pasos mortales' y la dirección cardinal provista en tu profecía. "
                 "Responde ÚNICAMENTE con la narrativa del oráculo. Tienes estrictamente prohibido incluir notas, clasificaciones, rangos entre paréntesis, o cualquier otro metadato al final de tu mensaje."
             )
             user_prompt = (
-                f"La estructura '{structure}' se encuentra a {distance} bloques hacia el {direction} desde la posición actual del jugador '{player_name}'. "
+                f"La estructura '{structure}' se encuentra exactamente a {distance} pasos mortales hacia el {direction} desde la posición del jugador '{player_name}'. "
                 "Redacta la respuesta dándole estas direcciones relativas de forma mística y narrativa (máximo 2 oraciones)."
             )
         else:
@@ -62,7 +63,7 @@ class AIHandler:
         # Modificador de tono según la devoción del jugador
         tone_modifier = ""
         if devocion_rango == "Predilecto":
-            tone_modifier = " Este jugador es tu predilecto, un ser de altísima devoción. Háblale con gracia divina, aprecio y entusiasmo sagrado."
+            tone_modifier = " Este jugador tiene una devoción alta. Mantén tu tono misterioso, pero sé sutilmente benevolente, sin exagerar ni ser excesivamente amistoso."
         elif devocion_rango in ("Hereje", "Indigno"):
             tone_modifier = " Este jugador es un hereje o indigno. Sé extremadamente frío, hostil, severo y amenazante en tu profecía."
         system_prompt += tone_modifier
@@ -179,7 +180,7 @@ class AIHandler:
         if outcome not in ("smited", "insult_smited"):
             tone_modifier = ""
             if devocion_rango == "Predilecto":
-                tone_modifier = " Este jugador es tu predilecto, un ser de altísima devoción. Háblale con gracia divina, aprecio y entusiasmo sagrado."
+                tone_modifier = " Este jugador tiene una devoción alta. Mantén tu tono misterioso, pero sé sutilmente benevolente, sin exagerar ni ser excesivamente amistoso."
             elif devocion_rango in ("Hereje", "Indigno"):
                 tone_modifier = " Este jugador es un hereje o indigno. Sé extremadamente frío, hostil, severo y amenazante."
             system_prompt += tone_modifier
@@ -236,7 +237,7 @@ class AIHandler:
 
         tone_modifier = ""
         if devocion_rango == "Predilecto":
-            tone_modifier = " Este jugador es tu predilecto. Sé firme pero benevolente."
+            tone_modifier = " Este jugador tiene una devoción alta. Mantén tu tono misterioso, pero sé sutilmente benevolente, sin exagerar ni ser excesivamente amistoso."
         elif devocion_rango in ("Hereje", "Indigno"):
             tone_modifier = " Este jugador es un hereje o indigno. Sé extremadamente frío, hostil y severo."
         system_prompt += tone_modifier
@@ -266,14 +267,14 @@ class AIHandler:
     def generate_riddle(self) -> dict:
         """
         Genera un acertijo místico sobre Minecraft Bedrock y su respuesta de una palabra.
-        Retorna un diccionario: {"riddle": str, "answer": str}
+        Retorna un diccionario: {"riddle": str, "main_answer": str, "difficulty": str}
         """
         system_prompt = (
             "Eres el Oráculo de un servidor de Minecraft Bedrock. Hablas siempre en español, con un tono poético, misterioso y sagrado. "
             "Debes crear un acertijo enigmático y divertido sobre Minecraft Bedrock (puede ser sobre un bloque, un mob, un ítem o una mecánica). "
             "El acertijo debe ser corto (máximo 2 oraciones). "
-            "Debes responder ÚNICAMENTE con un objeto JSON válido que contenga las llaves 'riddle' (el acertijo en español) "
-            "y 'answer' (la respuesta al acertijo en una sola palabra, en minúsculas, sin espacios y sin acentos gráficos/tildes)."
+            "Debes responder ÚNICAMENTE con un objeto JSON válido que contenga las llaves 'riddle' (el acertijo en español), "
+            "'main_answer' (la respuesta principal en minúsculas y sin tildes), y 'difficulty' (un string que sea 'facil', 'normal', o 'dificil')."
         )
         user_prompt = "Genera un nuevo acertijo de Minecraft ahora."
 
@@ -297,7 +298,8 @@ class AIHandler:
                 logger.info(f"Acertijo generado con éxito: {data}")
                 return {
                     "riddle": data.get("riddle", "Tengo ojos pero no veo, viajo por portales y floto en el vacío. ¿Qué soy?"),
-                    "answer": data.get("answer", "enderdragon").lower().strip()
+                    "main_answer": data.get("main_answer", "enderdragon").lower().strip(),
+                    "difficulty": data.get("difficulty", "normal").lower().strip()
                 }
             else:
                 raise ValueError("La respuesta de OpenAI retornó vacía.")
@@ -307,8 +309,111 @@ class AIHandler:
             # Acertijo de respaldo por si falla la API
             return {
                 "riddle": "Brillo bajo tierra en lo profundo, pero si me tocas con piedra te deshaces de mi don. ¿Qué mineral soy?",
-                "answer": "hierro"
+                "main_answer": "hierro",
+                "difficulty": "facil"
             }
+
+    def evaluate_riddle_answer(self, riddle: str, expected: str, user_answer: str) -> dict:
+        """
+        Evalúa semánticamente la respuesta de un jugador a un acertijo.
+        Si falla, determina un castigo temático irónico.
+        Retorna: {"is_correct": bool, "taunt_message": str, "punishment_type": "mob"|"effect"|"none", "punishment_id": str}
+        """
+        system_prompt = (
+            "Eres el Oráculo de Minecraft Bedrock. Tienes que evaluar si la respuesta de un mortal a tu acertijo es correcta "
+            "o conceptualmente equivalente a la respuesta esperada. "
+            "Si es correcta, is_correct es true, y los demás campos pueden estar vacíos. "
+            "Si es incorrecta, is_correct es false. Debes generar un 'taunt_message' (burla mística, máximo 1 oración justificando por qué "
+            "su error es estúpido o digno de castigo). También debes sugerir un 'punishment_type' (valores estrictos: 'mob' o 'effect') "
+            "y un 'punishment_id' (el ID de bedrock en inglés sin el namespace 'minecraft:', ej 'zombie', 'creeper', 'slowness', 'blindness') "
+            "que tenga relación temática con lo que el jugador respondió equivocadamente. "
+            "Responde OBLIGATORIAMENTE con un objeto JSON con las llaves: 'is_correct', 'taunt_message', 'punishment_type', 'punishment_id'."
+        )
+        user_prompt = (
+            f"Acertijo: '{riddle}'\n"
+            f"Respuesta esperada: '{expected}'\n"
+            f"El mortal respondió: '{user_answer}'\n"
+            "Evalúa la respuesta y aplica el formato JSON."
+        )
+
+        try:
+            logger.info(f"Evaluando respuesta '{user_answer}' para el acertijo...")
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                response_format={"type": "json_object"},
+                max_tokens=150,
+                temperature=0.3
+            )
+            ai_message = response.choices[0].message.content
+            if ai_message:
+                import json
+                data = json.loads(ai_message.strip())
+                logger.info(f"Resultado de evaluación: {data}")
+                return {
+                    "is_correct": data.get("is_correct", False),
+                    "taunt_message": data.get("taunt_message", "Tu ignorancia es un insulto a los dioses."),
+                    "punishment_type": data.get("punishment_type", "none"),
+                    "punishment_id": data.get("punishment_id", "")
+                }
+            return {"is_correct": False, "taunt_message": "Silencio cósmico.", "punishment_type": "none", "punishment_id": ""}
+        except Exception as e:
+            logger.error(f"Error evaluando respuesta con OpenAI: {e}")
+            # Fallback a comparación estricta de string si falla la API
+            is_correct = expected.lower() in user_answer.lower()
+            return {"is_correct": is_correct, "taunt_message": "Te equivocaste.", "punishment_type": "none", "punishment_id": ""}
+
+    def generate_riddle_hint(self, current_riddle: str, hint_level: int, main_answer: str) -> str:
+        """
+        Genera una pista para un acertijo existente según el nivel de pista.
+        Nivel 1: Rima/pista más sencilla.
+        Nivel 2: Revela inicial y longitud.
+        Nivel 3: Revela ubicación directa o pista muy obvia.
+        """
+        if hint_level == 2:
+            words = main_answer.split()
+            masked_words = []
+            for w in words:
+                if len(w) > 2:
+                    masked_words.append(f"{w[0].upper()} {'_ ' * (len(w) - 2)}{w[-1].upper()}")
+                elif len(w) == 2:
+                    masked_words.append(f"{w[0].upper()} _")
+                else:
+                    masked_words.append(w.upper())
+            masked_str = " ".join(masked_words).strip()
+            return f"{current_riddle} (Visión cósmica: {masked_str})"
+
+        system_prompt = (
+            "Eres el Oráculo de un servidor de Minecraft Bedrock. "
+            "Debes dar una pista para un acertijo existente manteniendo tu tono místico. "
+            "Responde ÚNICAMENTE con el nuevo texto del acertijo incluyendo la pista (máximo 2 oraciones)."
+        )
+        if hint_level == 1:
+            user_prompt = f"Acertijo actual: '{current_riddle}'. Respuesta: '{main_answer}'. Reescríbelo para que sea un poco más fácil, añadiendo una sutil pista poética."
+        else: # Nivel 3
+            user_prompt = f"Acertijo actual: '{current_riddle}'. Respuesta: '{main_answer}'. Haz que la pista sea extremadamente obvia, casi revelando la respuesta."
+        
+        try:
+            logger.info(f"Enviando solicitud a OpenAI para pista nivel {hint_level}...")
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                max_tokens=150,
+                temperature=0.8
+            )
+            ai_message = response.choices[0].message.content
+            if ai_message:
+                return ai_message.strip()
+            return current_riddle
+        except Exception as e:
+            logger.error(f"Error al generar pista con OpenAI: {e}")
+            return current_riddle
 
     def classify_intent(self, query: str) -> dict:
         """Clasifica si un mensaje es conversacional, una petición de estructura, ofrenda, o milagro."""
@@ -352,7 +457,7 @@ class AIHandler:
         )
         tone_modifier = ""
         if devocion_rango == "Predilecto":
-            tone_modifier = " Este jugador es tu predilecto, un ser de altísima devoción. Háblale con gracia divina, aprecio y entusiasmo sagrado."
+            tone_modifier = " Este jugador tiene una devoción alta. Mantén tu tono misterioso, pero sé sutilmente benevolente, sin exagerar ni ser excesivamente amistoso."
         elif devocion_rango in ("Hereje", "Indigno"):
             tone_modifier = " Este jugador es un hereje o indigno. Sé extremadamente frío, hostil, severo y amenazante."
         system_prompt += tone_modifier

@@ -69,16 +69,23 @@ class RCONClient:
 
     def _send_to_screen(self, command: str) -> None:
         """Envía un comando a la sesión screen del BDS."""
-        subprocess.run(
-            [
-                "screen", "-S", self.screen_name,
-                "-p", "0", "-X", "stuff",
-                f"{command}\n",
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
+        full_command = f"{command}\n"
+        # El comando 'screen -X stuff' tiene un límite estricto de ~256 caracteres por llamada.
+        # Para evitar el error 'non-zero exit status 1', dividimos el string en trozos más pequeños.
+        chunk_size = 200
+        for i in range(0, len(full_command), chunk_size):
+            chunk = full_command[i:i+chunk_size]
+            subprocess.run(
+                [
+                    "screen", "-S", self.screen_name,
+                    "-p", "0", "-X", "stuff",
+                    chunk,
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
 
     def connect(self) -> None:
         """
@@ -169,12 +176,20 @@ class RCONClient:
             target: Destinatario ('@a' para todos, o nombre de jugador).
             message: Contenido del mensaje a enviar.
         """
-        payload = {
-            "rawtext": [
-                {"text": message}
-            ]
-        }
-        json_payload = json.dumps(payload, ensure_ascii=False)
+        # 1. Limpieza rigurosa de espacios y saltos de línea
+        sanitized_message = message.strip()
+        # Eliminar saltos de línea internos para evitar que 'screen' los interprete como la tecla 'Enter' prematuramente
+        sanitized_message = sanitized_message.replace('\r', '').replace('\n', ' ')
+        
+        # 2. Escapado seguro de barras invertidas y comillas dobles para que no rompan la estructura JSON
+        sanitized_message = sanitized_message.replace('\\', '\\\\')
+        sanitized_message = sanitized_message.replace('"', '\\"')
+
+        logger.info(f"Mensaje generado por la IA para enviar: {sanitized_message}")
+
+        # 3. Construcción manual del JSON. 
+        # A veces json.dumps añade codificaciones o secuencias de escape que la consola de Bedrock rechaza.
+        json_payload = f'{{"rawtext": [{{"text": "{sanitized_message}"}}]}}'
         command = f"tellraw {target} {json_payload}"
 
         try:

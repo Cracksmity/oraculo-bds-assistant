@@ -1,66 +1,84 @@
-# Oráculo BDS Assistant
+# 👁️ Oráculo BDS Assistant
 
-Oráculo BDS Assistant es un bot avanzado y sistema de asistencia impulsado por inteligencia artificial para Minecraft Bedrock Dedicated Server (BDS). Utiliza una arquitectura basada en Webhooks, RCON y Google Gemini Pro para crear una entidad interactiva (El Oráculo) capaz de entender a los jugadores, proponer acertijos, recibir sacrificios y controlar el mundo de Minecraft.
+![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
+![Minecraft](https://img.shields.io/badge/Minecraft%20Bedrock-Dedicated%20Server-green)
+![Gemini Pro](https://img.shields.io/badge/AI-Google%20Gemini%20Pro-orange)
 
-## Características Principales
+**Oráculo BDS Assistant** es un sistema de asistencia avanzado y misterioso impulsado por inteligencia artificial para servidores de Minecraft Bedrock (BDS). Diseñado con una arquitectura híbrida (Webhooks + RCON + Google Gemini Pro), este bot introduce una deidad interactiva en tu mundo: **El Oráculo**.
 
-- **Chatbot Inteligente (Google Gemini):** El Oráculo responde a los jugadores en el chat de Minecraft de forma inmersiva y mística, interpretando intenciones mediante IA.
-- **Sistema de Devoción:** Los jugadores pueden interactuar, pedir favores y participar en pruebas para ganar el favor de los dioses.
-- **Acertijos del Oráculo:** El Oráculo puede retar a los jugadores con acertijos. Si aciertan, el Oráculo limpia el clima u otorga recompensas. Si fallan, pueden ser castigados.
-- **Sacrificios y Ofrendas:** Los jugadores pueden ofrecer objetos tirándolos frente al bloque del Oráculo. La IA evalúa el valor y rareza del objeto, y recompensa o castiga al jugador según su nivel de devoción.
-- **Control del Mundo (RCON):** El Oráculo tiene poder sobre el clima, el tiempo (día/noche), puede dar objetos (`/give`) y lanzar rayos (`/summon lightning_bolt`), todo procesado a través de comprensión del lenguaje natural.
+El Oráculo es capaz de entender lenguaje natural, juzgar las acciones de los jugadores, proponer acertijos, exigir sacrificios y, en última instancia, manipular el mismísimo clima y la vida en el servidor.
 
-## Arquitectura del Proyecto
+---
 
-El proyecto está dividido en dos partes principales:
+## ✨ Características Principales
 
-1. **Entorno Python (Raíz):**
-   Contiene el servidor Flask (webhooks), el cliente RCON y la lógica principal de la IA.
-   - `main.py`: Punto de entrada principal. Coordina webhooks, RCON y las interacciones del Oráculo.
-   - `ai_handler.py`: Módulo para procesar los prompts de Gemini, categorizar intenciones (charlar, acertijo, clima, item) y evaluar la validez de los sacrificios.
-   - `rcon_client.py`: Cliente asíncrono para enviar comandos directamente a la consola del servidor de Minecraft.
-   - `devocion.json`: Archivo para almacenar el estado y nivel de "devoción" y variables (como estado de acertijos) de los jugadores.
-   - `requirements.txt`: Dependencias de Python del proyecto.
-   - `.env`: Variables de entorno (API keys, configuración de puertos).
+*   **🗣️ Interacción Divina (Gemini Pro):** Respuestas inmersivas y místicas en el chat del juego. El Oráculo comprende el contexto y las intenciones de los jugadores mediante procesamiento de lenguaje natural.
+*   **⚖️ Sistema de Devoción:** Cada jugador tiene un nivel de "favor" con los dioses. Completa pruebas o sé castigado según tus actos.
+*   **🧩 Acertijos Mortales:** El Oráculo puede retar a los atrevidos. Respuestas correctas traen bendiciones (ítems raros, cielos despejados); los fallos invocan la ira divina (rayos, monstruos).
+*   **🔥 Sacrificios y Ofrendas:** Arroja objetos valiosos frente al altar del Oráculo. La IA evalúa la rareza del ítem. Las ofrendas raras aumentan tu devoción; la basura te costará caro.
+*   **⚡ Control Absoluto del Entorno (RCON):** Interacción directa con la consola de Minecraft. El Oráculo altera el tiempo (`/time`), el clima (`/weather`), recompensa (`/give`) y castiga (`/summon`) sin intervención del administrador.
 
-2. **Behavior Pack (`oraculo_bridge/`):**
-   Esta carpeta contiene el add-on (behavior pack) que debe ser instalado en el servidor de Minecraft Bedrock. 
-   - `manifest.json`: Manifiesto del Behavior Pack. Requiere permisos para `@minecraft/server` y `@minecraft/server-net`.
-   - `scripts/main.js`: Script en JavaScript que se ejecuta dentro del juego. Captura mensajes del chat, detecta objetos tirados (sacrificios) y se comunica con el servidor Python a través de HTTP.
+---
 
-## Requisitos previos
+## 🏗️ Arquitectura del Sistema
 
-- Python 3.8 o superior.
-- Servidor de Minecraft Bedrock Dedicated Server (BDS) con soporte para scripting (API de scripts habilitada).
-- Acceso a RCON habilitado en el servidor (`server.properties`).
-- Una API Key de **Google Gemini** (`GOOGLE_API_KEY`).
+El sistema opera en dos frentes que se comunican en tiempo real:
 
-## Instalación y Configuración
+1.  **🧠 El Cerebro (Python - Servidor local/VPS):**
+    Gestiona la lógica pesada, la IA y las respuestas.
+    *   `main.py`: El corazón del sistema. Coordina los endpoints de Webhook y los envíos por RCON.
+    *   `ai_handler.py`: Interfaz con Gemini Pro. Clasifica intenciones (charlas, clima, sacrificios) y moldea la personalidad del Oráculo.
+    *   `rcon_client.py`: Puente asíncrono para inyectar comandos directamente en la consola del BDS.
+    *   `devocion.json`: Base de datos de jugadores que registra sus niveles de favor divino y progreso.
 
-1. **Instalar dependencias de Python:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+2.  **👁️ Los Ojos y Oídos (JavaScript - Behavior Pack):**
+    Ubicado en `oraculo_bridge/`. Se ejecuta dentro del mundo de Minecraft.
+    *   Captura eventos del chat (`beforeChatSend`).
+    *   Detecta ítems arrojados en el mundo (sacrificios).
+    *   Se comunica mediante peticiones HTTP (`@minecraft/server-net`) con el cerebro de Python.
 
-2. **Variables de Entorno:**
-   Crea un archivo `.env` en la raíz del proyecto (este archivo es ignorado por git por seguridad). Agrega tus credenciales y configuración:
-   ```env
-   # API Keys
-   GOOGLE_API_KEY=tu_api_key_de_gemini
+---
 
-   # Configuración de RCON
-   RCON_HOST=127.0.0.1
-   RCON_PORT=25575
-   RCON_PASSWORD=tu_contraseña_rcon
-   ```
+## 🛠️ Requisitos e Instalación
 
-3. **Instalación del Behavior Pack:**
-   Copia el contenido de la carpeta `oraculo_bridge/` al directorio `behavior_packs` de tu servidor en la VPS y asegúrate de habilitarlo. Asegúrate de configurar la IP correcta hacia donde está corriendo el servidor Python dentro de `main.js`.
+### Requisitos Previos
+*   Python 3.8 o superior.
+*   Servidor Bedrock Dedicated Server (BDS) con **Beta APIs habilitadas** (o las APIs estables necesarias para script-net).
+*   Acceso a RCON activado en `server.properties` (`enable-rcon=true`).
+*   Una API Key válida de [Google AI Studio (Gemini)](https://aistudio.google.com/).
 
-## Uso
+### Instalación Paso a Paso
 
-Para iniciar el bot y el servidor de webhooks localmente:
-```bash
-python main.py
-```
-*(Nota: Asegúrate de tener los puertos de webhook abiertos (por defecto 5000) y el RCON correctamente configurado para que el script pueda interactuar con el servidor de Minecraft)*.
+1.  **Clona o descarga este repositorio.**
+2.  **Instala las dependencias de Python:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+3.  **Configura las Variables de Entorno:**
+    Crea un archivo `.env` en la raíz (agrega tus credenciales). Este archivo es ignorado por seguridad:
+    ```env
+    # API Keys
+    GOOGLE_API_KEY=tu_api_key_aqui
+
+    # Configuración de RCON
+    RCON_HOST=127.0.0.1
+    RCON_PORT=25575
+    RCON_PASSWORD=tu_password_fuerte
+    ```
+4.  **Instala el Behavior Pack:**
+    *   Copia la carpeta `oraculo_bridge/` dentro de la carpeta `behavior_packs` de tu BDS.
+    *   Aplica el pack al mundo y **activa las opciones de experimentación necesarias** (Beta APIs / Scripts).
+    *   *Nota:* Asegúrate de que el archivo `scripts/main.js` del addon apunte a la IP y puerto correctos de tu servidor Python (por defecto `http://127.0.0.1:5000`).
+5.  **Despierta al Oráculo:**
+    ```bash
+    python main.py
+    ```
+
+---
+
+## 📚 Documentación y Secretos
+
+Para más detalles sobre cómo personalizar al Oráculo, las reglas del sistema de Devoción y los **Misterios (Easter Eggs)** ocultos que puedes implementar en tu servidor, consulta nuestra [DOCUMENTACIÓN OFICIAL (DOCUMENTACION.md)](DOCUMENTACION.md).
+
+---
+*Que los Dioses de Bedrock tengan piedad de tu mundo.*

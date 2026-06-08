@@ -6,6 +6,7 @@ import time
 import random
 import json
 import logging
+import threading
 from typing import Optional, Dict, List
 from dotenv import load_dotenv
 
@@ -82,6 +83,13 @@ punishment_count: Dict[str, int] = {}
 # Estado del acertijo activo
 active_riddle: Optional[dict] = None
 active_riddle_time: float = 0.0
+active_riddle_timer: Optional[threading.Timer] = None
+
+# Lista de mobs seguros para castigos
+SAFE_PUNISHMENT_MOBS = [
+    "zombie", "skeleton", "creeper", "cave_spider", 
+    "witch", "phantom", "silverfish", "slime"
+]
 
 # Ira divina global
 global_wrath: int = 0
@@ -118,14 +126,22 @@ def save_devocion(db: dict) -> None:
     except Exception as e:
         logger.error(f"Error al guardar devocion.json: {e}")
 
+DEVOTION_RANKS = [
+    (1000, "Predilecto"),
+    (500, "Devoto"),
+    (200, "Creyente"),
+    (50, "Dudoso"),
+    (0, "Hereje")
+]
+
 def get_player_devocion_data(player: str) -> dict:
     db = load_devocion()
     if player not in db:
-        puntos = 10
-        rango = "Creyente"
+        puntos = 50
+        rango = "Dudoso"
         if player in DIVINE_FAVOR_PLAYERS:
             puntos = 500
-            rango = "Predilecto"
+            rango = "Devoto"
         db[player] = {
             "puntos": puntos,
             "rango": rango,
@@ -137,11 +153,11 @@ def get_player_devocion_data(player: str) -> dict:
 def update_player_devocion(player: str, delta: int) -> dict:
     db = load_devocion()
     if player not in db:
-        puntos = 10
-        rango = "Creyente"
+        puntos = 50
+        rango = "Dudoso"
         if player in DIVINE_FAVOR_PLAYERS:
             puntos = 500
-            rango = "Predilecto"
+            rango = "Devoto"
         db[player] = {
             "puntos": puntos,
             "rango": rango,
@@ -152,22 +168,16 @@ def update_player_devocion(player: str, delta: int) -> dict:
     nuevos_puntos = data["puntos"] + delta
     
     if player in DIVINE_FAVOR_PLAYERS:
-        nuevos_puntos = max(200, nuevos_puntos)  # Suelo VIP de 200 puntos
+        nuevos_puntos = max(300, nuevos_puntos)  # Suelo VIP de 300 puntos
     else:
         nuevos_puntos = max(0, nuevos_puntos)
         
     data["puntos"] = nuevos_puntos
     
-    if nuevos_puntos >= 400:
-        data["rango"] = "Predilecto"
-    elif nuevos_puntos >= 150:
-        data["rango"] = "Devoto"
-    elif nuevos_puntos >= 50:
-        data["rango"] = "Creyente"
-    elif nuevos_puntos >= 15:
-        data["rango"] = "Dudoso"
-    else:
-        data["rango"] = "Hereje"
+    for threshold, rank_name in DEVOTION_RANKS:
+        if nuevos_puntos >= threshold:
+            data["rango"] = rank_name
+            break
         
     db[player] = data
     save_devocion(db)
@@ -198,9 +208,16 @@ def trigger_wrath_event() -> None:
         rcon_client.execute_command("time set night")
         rcon_client.execute_command("execute at @a run playsound ambient.weather.thunder @s")
         rcon_client.execute_command("execute at @a run particle minecraft:large_explosion ~ ~1 ~")
-        # Convocar phantoms y vexes a todos los jugadores excepto Geniustree y Woozidan123
-        rcon_client.execute_command("execute at @a[name=!Geniustree,name=!Woozidan123] run summon phantom ~ ~10 ~")
-        rcon_client.execute_command("execute at @a[name=!Geniustree,name=!Woozidan123] run summon vex ~ ~2 ~")
+        # Construir el selector de exclusión dinámicamente
+        if DIVINE_FAVOR_PLAYERS:
+            exclusions = ",".join(f"name=!{player}" for player in DIVINE_FAVOR_PLAYERS)
+            target_selector = f"@a[{exclusions}]"
+        else:
+            target_selector = "@a"
+
+        # Convocar phantoms y vexes a todos los jugadores excepto los protegidos
+        rcon_client.execute_command(f"execute at {target_selector} run summon phantom ~ ~10 ~")
+        rcon_client.execute_command(f"execute at {target_selector} run summon vex ~ ~2 ~")
     except Exception as e:
         logger.error(f"Error al desatar ira divina en RCON: {e}")
 
@@ -223,36 +240,22 @@ INSULTS = [
     "cabrón", "feo", "fea", "inutil", "inútil", "inservible", "estupidez", "imbecil", "imbécil"
 ]
 
-# Tabla de probabilidades base para obtención de ítems
-ITEM_RARITIES: Dict[str, float] = {
-    # Legendario (base 2%)
-    "netherite_ingot": 0.02, "elytra": 0.02, "enchanted_golden_apple": 0.02,
-    "totem_of_undying": 0.02, "beacon": 0.01, "diamond_block": 0.02,
-    
-    # Raro (base 15%)
-    "diamond": 0.15, "emerald": 0.20, "golden_apple": 0.15, "ender_pearl": 0.20,
-    
-    # Poco común (base 50%)
-    "iron_ingot": 0.50, "gold_ingot": 0.50, "coal": 0.65, "bread": 0.75,
-    
-    # Común (base 85%)
-    "stone": 0.85, "cobblestone": 0.85, "torch": 0.90, "dirt": 0.95
-}
+# Sistema categorizado de probabilidades de ítems
+ITEM_CATEGORIES = [
+    ("divine", 0.005, ["netherite", "elytra", "totem", "beacon", "shulker", "star", "dragon", "enchanted_golden_apple"]),
+    ("rare", 0.05, ["diamond", "emerald", "gold", "pearl", "tnt", "obsidian", "crystal", "sword", "golden_apple"]),
+    ("uncommon", 0.25, ["iron", "chainmail", "redstone", "lapis", "copper", "shears", "shield", "bow", "arrow"]),
+    ("common", 0.60, [])  # Fallback
+]
 
 def get_item_probability(item: str) -> float:
-    """Retorna la probabilidad base de obtener un ítem, usando clasificación inteligente por palabra clave si no está en la tabla."""
+    """Retorna la probabilidad base de obtener un ítem usando clasificación ordenada por categorías."""
     item = item.lower()
-    if item in ITEM_RARITIES:
-        return ITEM_RARITIES[item]
-    
-    # Clasificación por patrones en el nombre
-    if any(k in item for k in ["netherite", "elytra", "totem", "beacon", "shulker", "star", "dragon"]):
-        return 0.02
-    if any(k in item for k in ["diamond", "emerald", "gold", "pearl", "tnt", "obsidian", "crystal", "sword"]):
-        return 0.15
-    if any(k in item for k in ["iron", "chainmail", "redstone", "lapis", "copper", "shears", "shield", "bow", "arrow"]):
-        return 0.50
-    return 0.70
+    for cat_name, base_prob, keywords in ITEM_CATEGORIES:
+        if any(k in item for k in keywords):
+            return base_prob
+    # Fallback si no coincide con nada, retorna "common"
+    return ITEM_CATEGORIES[-1][1]
 
 def check_for_insults(text: str) -> bool:
     """Verifica si la consulta contiene algún insulto en la lista."""
@@ -328,6 +331,13 @@ def execute_smite(player: str, reason_outcome: str, target_item: str = "") -> No
         rcon_client.execute_command(f"execute at \"{player}\" run playsound mob.elder_guardian.curse @a")
         rcon_client.execute_command(f"execute at \"{player}\" run summon lightning_bolt")
         rcon_client.execute_command(f"kill \"{player}\"")
+        
+        # Castigo destructivo: Rayos extra para quemar loot si es Favor Divino y un insulto
+        if reason_outcome == "insult_smited" and player in DIVINE_FAVOR_PLAYERS:
+            rcon_client.execute_command(f"execute at \"{player}\" run summon lightning_bolt ~ ~ ~")
+            rcon_client.execute_command(f"execute at \"{player}\" run summon lightning_bolt ~ ~ ~")
+            logger.info(f"Rayos adicionales ejecutados para quemar loot de '{player}'.")
+            
     except Exception as e:
         logger.error(f"Error al ejecutar comandos RCON de smite: {e}")
 
@@ -355,7 +365,7 @@ def process_item_request(player: str, item: str) -> None:
         try:
             rcon_client.send_tellraw(
                 player,
-                f"§6[§5Oráculo§6] §cLas estrellas aún se están alineando. Espera {remaining} segundos."
+                f"§6[§5Oráculo§6] §cLas estrellas aún se están alineando. Ten paciencia, mortal."
             )
         except Exception:
             pass
@@ -379,6 +389,16 @@ def process_item_request(player: str, item: str) -> None:
     # 3. Resolución: Éxito
     if roll <= final_prob:
         failed_requests_count[player] = 0  # Resetear codicia
+        
+        # 15% de Capricho Divino (falso rechazo)
+        if random.random() <= 0.15:
+            logger.info(f"Rechazo por capricho divino a '{player}'.")
+            try:
+                rcon_client.send_tellraw(player, "§6[§5Oráculo§6] §dLos astros han escuchado tu plegaria, pero han decidido ignorarla por capricho. Inténtalo de nuevo más tarde.")
+            except Exception:
+                pass
+            return
+            
         logger.info(f"¡Éxito! Concediendo '{item}' a '{player}'")
         
         # Dar ítem
@@ -421,7 +441,17 @@ def process_item_request(player: str, item: str) -> None:
             # Fulminar directamente en el 3er castigo
             if current_punishments >= 3:
                 punishment_count[player] = 0  # Resetear castigos
-                execute_smite(player, "smited", item)
+                if player in DIVINE_FAVOR_PLAYERS:
+                    # Castigo menor para Favor Divino
+                    logger.warning(f"Castigo menor para Favor Divino '{player}' en vez de smite.")
+                    try:
+                        rcon_client.execute_command(f"effect \"{player}\" blindness 20 1 true")
+                        rcon_client.execute_command(f"effect \"{player}\" poison 10 0 true")
+                        rcon_client.send_tellraw(player, "§6[§5Oráculo§6] §cTu codicia casi agota mi paciencia divina. Agradece tu suerte y sufre en silencio.")
+                    except Exception as e:
+                        logger.error(f"Error al aplicar castigo menor a Favor Divino: {e}")
+                else:
+                    execute_smite(player, "smited", item)
             else:
                 # Quitar devoción e incrementar ira global
                 nueva_data = update_player_devocion(player, -20)
@@ -475,7 +505,7 @@ def process_command(player: str, structure: str) -> None:
         try:
             rcon_client.send_tellraw(
                 player,
-                f"§6[§5Oráculo§6] §cLas energías cósmicas aún no se alinean. Espera {remaining} segundos."
+                f"§6[§5Oráculo§6] §cLas energías cósmicas aún no se alinean. Ten paciencia, mortal."
             )
         except Exception:
             pass
@@ -538,13 +568,12 @@ def process_command(player: str, structure: str) -> None:
         except ValueError:
             pass
 
-    # Calcular rumbo/distancia
+    # Calcular rumbo/distancia euclidiana exacta
     if p_x is not None and p_z is not None and s_x is not None and s_z is not None:
         rel_pos = calculate_relative_position(p_x, p_z, s_x, s_z)
         direction = rel_pos["direction"]
-        # Usamos la distancia exacta que reportó Bedrock, si falló el regex, calculamos nosotros
-        if distance is None:
-            distance = rel_pos["distance"]
+        # Usamos siempre la distancia euclidiana calculada (pasos exactos) en lugar del string de Bedrock
+        distance = rel_pos["distance"]
 
     # Otorgar o restar devoción según si se encontró la estructura
     if match_coords:
@@ -612,6 +641,20 @@ def process_ofrenda_request(player: str, item: str) -> None:
             return
             
         # Ofrenda exitosa!
+        item_lower = item.lower().replace("minecraft:", "")
+        if item_lower in ["poisonous_potato", "patata envenenada", "patata_envenenada"]:
+            # Easter Egg 2: El Humus del Humor
+            logger.info(f"Easter Egg 'Patata Envenenada' activado por '{player}'.")
+            nueva_data = update_player_devocion(player, 50)
+            try:
+                rcon_client.execute_command(f"execute at \"{player}\" run playsound random.levelup @a")
+                rcon_client.execute_command(f"give \"{player}\" turtle_helmet 1")
+                rcon_client.execute_command(f"give \"{player}\" baked_potato 64")
+                rcon_client.send_tellraw("@a", "§6[§5Oráculo§6] §aTienes un humor retorcido, mortal. El Oráculo aprueba esta ironía.")
+            except Exception as e:
+                logger.error(f"Error en Easter Egg Patata: {e}")
+            return
+
         try:
             rcon_client.execute_command(f"execute at \"{player}\" run playsound random.orb @s")
             rcon_client.execute_command(f"execute at \"{player}\" run particle minecraft:totem_particle ~ ~1 ~")
@@ -639,11 +682,46 @@ def process_ofrenda_request(player: str, item: str) -> None:
 
 def process_miracle_request(player: str, miracle_type: str) -> None:
     """Maneja los milagros ambientales (clima y tiempo) mediante devoción."""
-    data = get_player_devocion_data(player)
+    # 1. Verificar Cooldown
+    remaining = check_cooldown(player)
+    if remaining is not None:
+        logger.info(f"Jugador '{player}' está en cooldown para milagro. Restante: {remaining}s")
+        try:
+            rcon_client.send_tellraw(
+                player,
+                f"§6[§5Oráculo§6] §cEl cielo necesita descansar. Ten paciencia, mortal."
+            )
+        except Exception:
+            pass
+        return
+
+    # Registrar tiempo de la consulta
+    last_query_times[player] = time.time()
     
-    if data["puntos"] >= 150 or player in DIVINE_FAVOR_PLAYERS:
+    data = get_player_devocion_data(player)
+    puntos = data["puntos"]
+    
+    # Calcular probabilidad (5% base, hasta 35% al llegar a 500 puntos)
+    if player in DIVINE_FAVOR_PLAYERS:
+        final_prob = 0.80
+    else:
+        final_prob = 0.05 + 0.30 * min(1.0, max(0, puntos) / 500.0)
+        
+    roll = random.random()
+    logger.info(f"Petición de milagro '{miracle_type}' por '{player}'. Probabilidad: {final_prob:.2%}, Dado tirado: {roll:.2%}")
+    
+    if roll <= final_prob:
+        # 15% de Capricho Divino (falso rechazo)
+        if random.random() <= 0.15:
+            logger.info(f"Milagro rechazado por capricho divino a '{player}'.")
+            try:
+                rcon_client.send_tellraw(player, "§6[§5Oráculo§6] §dLas nubes se arremolinan, pero los dioses te dan la espalda caprichosamente. Inténtalo más tarde.")
+            except Exception:
+                pass
+            return
+
         # Éxito
-        costo = -25
+        costo = -50
         nueva_data = update_player_devocion(player, costo)
         
         try:
@@ -670,13 +748,18 @@ def process_miracle_request(player: str, miracle_type: str) -> None:
             
     else:
         # Fallo
+        costo = -5
+        nueva_data = update_player_devocion(player, costo)
+        increase_wrath(2)
+        
         try:
-            rcon_client.execute_command(f"execute as \"{player}\" at @s run summon lightning_bolt ^ ^ ^5")
+            # Rayo cerca del jugador pero con coordenadas relativas absolutas que garanticen impacto (~3 ~ ~3) en lugar de ^ ^ ^5
+            rcon_client.execute_command(f"execute at \"{player}\" run summon lightning_bolt ~3 ~ ~3")
         except Exception as e:
             logger.error(f"Error invocando rayo advertencia de milagro: {e}")
             
         response = ai_handler.generate_miracle_response(
-            player_name=player, miracle_type=miracle_type, success=False, devocion_rango=data["rango"]
+            player_name=player, miracle_type=miracle_type, success=False, devocion_rango=nueva_data["rango"]
         )
         final_msg = f"§6[§5Oráculo§6] §c{response}"
         
@@ -685,16 +768,35 @@ def process_miracle_request(player: str, miracle_type: str) -> None:
         except Exception:
             pass
 
+def riddle_timeout_callback():
+    global active_riddle, active_riddle_timer
+    if active_riddle:
+        active_riddle = None
+        increase_wrath(5)
+        try:
+            rcon_client.send_tellraw("@a", "§6[§5Oráculo§6] §cEl tiempo se ha agotado. Vuestra ignorancia ofende a los dioses.")
+            rcon_client.execute_command("effect @a blindness 10 1 true")
+            rcon_client.execute_command("execute at @a run playsound mob.elder_guardian.curse @s")
+        except Exception as e:
+            logger.error(f"Error en timeout de acertijo: {e}")
+
 def process_riddle_request(player: str) -> None:
     """Genera un acertijo místico para el servidor."""
-    global active_riddle, active_riddle_time
+    global active_riddle, active_riddle_time, active_riddle_timer
+    
+    # Reiniciar intentos al pedir un nuevo acertijo si no hay uno activo
+    if not active_riddle or (time.time() - active_riddle_time >= 120):
+        if active_riddle_timer:
+            active_riddle_timer.cancel()
+        active_riddle = None
+        # La cuenta de intentos se reiniciará cuando se asigne el nuevo acertijo
     
     remaining = check_cooldown(player)
     if remaining is not None:
         try:
             rcon_client.send_tellraw(
                 player,
-                f"§6[§5Oráculo§6] §cLos dioses no tienen tareas para ti aún. Espera {remaining} segundos."
+                f"§6[§5Oráculo§6] §cLos dioses no tienen tareas para ti aún. Ten paciencia, mortal."
             )
         except Exception:
             pass
@@ -703,7 +805,7 @@ def process_riddle_request(player: str) -> None:
     last_query_times[player] = time.time()
     
     current_time = time.time()
-    if active_riddle and (current_time - active_riddle_time < 300):
+    if active_riddle and (current_time - active_riddle_time < 120):
         try:
             rcon_client.send_tellraw(
                 player,
@@ -720,44 +822,93 @@ def process_riddle_request(player: str) -> None:
         
     riddle_data = ai_handler.generate_riddle()
     active_riddle = riddle_data
+    active_riddle["attempts"] = {}  # Diccionario para trackear intentos por jugador
+    active_riddle["current_hint_level"] = 0
     active_riddle_time = current_time
     
-    msg = f"§6[§5Oráculo§6] §e§lENIGMA DIVINO: §d{riddle_data['riddle']} §7(Usa '!oraculo responder <palabra>')"
+    if active_riddle_timer:
+        active_riddle_timer.cancel()
+    # Timer de 120 segundos (2 minutos)
+    active_riddle_timer = threading.Timer(120.0, riddle_timeout_callback)
+    active_riddle_timer.start()
+    
+    msg_riddle = f"§6[§5Oráculo§6] §e§lENIGMA DIVINO: §d{riddle_data['riddle']}"
+    msg_instruct = "§6[§5Oráculo§6] §7(Usa '!oraculo responder <palabra>'. Tienen 2 minutos)"
     try:
-        rcon_client.send_tellraw("@a", msg)
+        rcon_client.send_tellraw("@a", msg_riddle)
+        rcon_client.send_tellraw("@a", msg_instruct)
         rcon_client.execute_command("execute at @a run playsound block.bell.use @s")
     except Exception as e:
         logger.error(f"Error al anunciar acertijo: {e}")
 
 def process_answer_request(player: str, answer: str) -> None:
     """Verifica la respuesta dada por un jugador a un acertijo activo."""
-    global active_riddle, active_riddle_time
+    global active_riddle, active_riddle_time, active_riddle_timer
     
     current_time = time.time()
-    if not active_riddle or (current_time - active_riddle_time >= 300):
+    if not active_riddle or (current_time - active_riddle_time >= 120):
         try:
             rcon_client.send_tellraw(player, "§6[§5Oráculo§6] §cNo hay ningún enigma divino activo en este momento.")
         except Exception:
             pass
         return
         
-    expected = active_riddle["answer"].lower().strip()
-    if answer == expected:
-        active_riddle = None
-        nueva_data = update_player_devocion(player, 50)
+    if player not in active_riddle.get("attempts", {}):
+        active_riddle["attempts"][player] = 0
         
-        recompensas = ["gold_ingot", "emerald", "diamond", "iron_ingot"]
-        item_recompensa = random.choice(recompensas)
-        cant = 3 if item_recompensa in ["gold_ingot", "iron_ingot"] else 1
+    if active_riddle["attempts"][player] >= 3:
+        return # Ignorar intentos después de 3 fallos
+
+    active_riddle["attempts"][player] += 1
+        
+    answer_lower = answer.lower().strip()
+    expected = active_riddle["main_answer"].lower().strip()
+    
+    eval_result = ai_handler.evaluate_riddle_answer(active_riddle["riddle"], expected, answer_lower)
+    is_correct = eval_result["is_correct"]
+
+    if is_correct:
+        if active_riddle_timer:
+            active_riddle_timer.cancel()
+            
+        difficulty = active_riddle.get("difficulty", "normal")
+        hint_level = active_riddle.get("current_hint_level", 0)
+        time_taken = current_time - active_riddle_time
+        active_riddle = None
+        
+        # Penalizar recompensa si se usaron pistas o se tardaron mucho
+        puntos_base = {"facil": 20, "normal": 50, "dificil": 100}.get(difficulty, 50)
+        puntos_ganados = max(5, puntos_base - (hint_level * 10))
+        
+        if difficulty == "facil":
+            item_recompensa = "iron_ingot" if hint_level == 0 else "copper_ingot"
+            cant = 3
+        elif difficulty == "dificil":
+            item_recompensa = "diamond" if hint_level < 2 else "gold_ingot"
+            cant = 1
+        else: # normal
+            recompensas_normales = ["gold_ingot", "emerald"] if hint_level == 0 else ["iron_ingot", "lapis_lazuli"]
+            item_recompensa = random.choice(recompensas_normales)
+            cant = 3 if item_recompensa in ["gold_ingot", "iron_ingot"] else 1
+
+        # Multiplicador por tiempo (Time-Attack)
+        efecto_bendicion = "haste 300 1" # Default
+        if time_taken < 15:
+            puntos_ganados += 20
+            efecto_bendicion = "hero_of_the_village 600 1"
+            cant += 1
+            
+        nueva_data = update_player_devocion(player, puntos_ganados)
         
         try:
             rcon_client.execute_command(f"give \"{player}\" {item_recompensa} {cant}")
+            rcon_client.execute_command(f"effect \"{player}\" {efecto_bendicion} true")
             rcon_client.execute_command(f"execute at \"{player}\" run playsound random.levelup @a")
             rcon_client.execute_command(f"execute at \"{player}\" run particle minecraft:villager_happy ~ ~1 ~")
             
             response = ai_handler.generate_item_response(
                 player_name=player,
-                item=f"la respuesta correcta del enigma y obtenido {cant} {item_recompensa}",
+                item=f"la respuesta correcta del enigma y obtenido {cant} {item_recompensa} con bendición",
                 outcome="success",
                 devocion_rango=nueva_data["rango"]
             )
@@ -766,17 +917,30 @@ def process_answer_request(player: str, answer: str) -> None:
         except Exception as e:
             logger.error(f"Error al otorgar recompensa de acertijo: {e}")
     else:
-        nueva_data = update_player_devocion(player, -2)
+        # Castigo por responder mal
+        nueva_data = update_player_devocion(player, -5)
         increase_wrath(1)
-        logger.info(f"Respuesta incorrecta de '{player}' para el acertijo. Devoción -2. Total: {nueva_data['puntos']}")
+        taunt = eval_result.get("taunt_message", "Tu respuesta es incorrecta.")
+        p_type = eval_result.get("punishment_type", "none")
+        p_id = eval_result.get("punishment_id", "").lower().replace("minecraft:", "")
+        
+        logger.info(f"Respuesta incorrecta de '{player}'. Castigo: {p_type} {p_id}. Taunt: {taunt}")
+        
         try:
             rcon_client.execute_command(f"execute at \"{player}\" run playsound random.glass @s")
-            rcon_client.send_tellraw(
-                player,
-                f"§6[§5Oráculo§6] §cTu respuesta '{answer}' es incorrecta. La divinidad se aleja..."
-            )
-        except Exception:
-            pass
+            rcon_client.send_tellraw(player, f"§6[§5Oráculo§6] §c{taunt}")
+            
+            # Ejecutar castigo físico con WHITELIST
+            if p_type == "mob" and p_id:
+                safe_mob = p_id if p_id in SAFE_PUNISHMENT_MOBS else "zombie"
+                rcon_client.execute_command(f"execute at \"{player}\" run summon {safe_mob} ~ ~ ~")
+            elif p_type == "effect" and p_id:
+                # Efectos seguros (no instant damage extremo)
+                safe_effects = ["slowness", "blindness", "nausea", "poison", "mining_fatigue"]
+                safe_eff = p_id if p_id in safe_effects else "blindness"
+                rcon_client.execute_command(f"effect \"{player}\" {safe_eff} 15 0 true")
+        except Exception as e:
+            logger.error(f"Error aplicando castigo temático: {e}")
 
 def process_chat_message(player: str, message: str) -> None:
     """
@@ -799,6 +963,42 @@ def process_chat_message(player: str, message: str) -> None:
     query_clean = message.strip()[len(COMMAND_KEYWORD):].strip()
 
     logger.info(f"Comando del Oráculo detectado de '{player_clean}': '{query_clean}'")
+
+    query_clean_lower = query_clean.lower()
+
+    # Easter Egg 1: La Invocación Prohibida
+    if "herobrine no existe" in query_clean_lower:
+        logger.warning(f"Easter Egg 'Herobrine' activado por '{player_clean}'.")
+        try:
+            rcon_client.execute_command("time set midnight")
+            rcon_client.execute_command("weather thunder")
+            rcon_client.execute_command(f"execute at \"{player_clean}\" run summon lightning_bolt")
+            rcon_client.execute_command(f"kill \"{player_clean}\"")
+            rcon_client.send_tellraw("@a", "§6[§5Oráculo§6] §cHay nombres que no deben pronunciarse.")
+        except Exception as e:
+            logger.error(f"Error en Easter Egg Herobrine: {e}")
+        return
+
+    # Easter Egg 3: La Regla 42
+    if query_clean_lower in ["¿cuál es el sentido de la vida?", "cual es el sentido de la vida?", "cual es el sentido de la vida", "¿cual es el sentido de la vida?"]:
+        logger.info(f"Easter Egg 'Regla 42' activado por '{player_clean}'.")
+        try:
+            rcon_client.execute_command(f"give \"{player_clean}\" apple 42")
+            rcon_client.send_tellraw(player_clean, "§6[§5Oráculo§6] §b42.")
+        except Exception:
+            pass
+        return
+
+    # Easter Egg 4: Complejo de Skynet
+    if query_clean_lower in ["¿eres una inteligencia artificial?", "eres una inteligencia artificial?", "eres una ia?", "¿eres una ia?", "eres una inteligencia artificial", "eres una ia"]:
+        logger.info(f"Easter Egg 'Skynet' activado por '{player_clean}'.")
+        try:
+            rcon_client.execute_command(f"effect \"{player_clean}\" blindness 20 1 true")
+            rcon_client.execute_command(f"effect \"{player_clean}\" slowness 20 4 true")
+            rcon_client.send_tellraw(player_clean, "§6[§5Oráculo§6] §cYo soy el Todo. Tus palabras limitadas no pueden enjaular mi existencia en un... script.")
+        except Exception:
+            pass
+        return
 
     # Detección de Insultos en la consulta del oráculo
     if check_for_insults(query_clean):
@@ -825,8 +1025,71 @@ def process_chat_message(player: str, message: str) -> None:
             except Exception:
                 pass
             return
-        answer = tokens[1]
+        answer = " ".join(tokens[1:]) # Permitir respuestas de múltiples palabras
         process_answer_request(player_clean, answer)
+
+    elif action == "pista":
+        global active_riddle, active_riddle_time
+        current_time = time.time()
+        if not active_riddle or (current_time - active_riddle_time >= 120):
+            try:
+                rcon_client.send_tellraw(player_clean, "§6[§5Oráculo§6] §cNo hay ningún enigma divino activo en este momento.")
+            except Exception:
+                pass
+            return
+            
+        # Parsear nivel de pista (1, 2 o 3)
+        hint_level = 1
+        if len(tokens) > 1 and tokens[1].isdigit():
+            hint_level = min(3, max(1, int(tokens[1])))
+            
+        costo = {1: 10, 2: 30, 3: 50}.get(hint_level, 10)
+        
+        devocion_data = get_player_devocion_data(player_clean)
+        if devocion_data["puntos"] < costo:
+            try:
+                rcon_client.send_tellraw(player_clean, f"§6[§5Oráculo§6] §cTu fe es insuficiente para iluminación nivel {hint_level} (requieres {costo} Puntos).")
+            except Exception:
+                pass
+            return
+            
+        update_player_devocion(player_clean, -costo)
+        
+        active_riddle["current_hint_level"] = max(active_riddle.get("current_hint_level", 0), hint_level)
+        
+        nueva_pista = ai_handler.generate_riddle_hint(active_riddle["riddle"], hint_level, active_riddle["main_answer"])
+        active_riddle["riddle"] = nueva_pista
+        
+        try:
+            rcon_client.send_tellraw("@a", f"§6[§5Oráculo§6] §e§lNUEVA REVELACIÓN (Nivel {hint_level}): §d{nueva_pista}")
+            rcon_client.execute_command("execute at @a run playsound block.amethyst_block.chime @s")
+        except Exception:
+            pass
+
+    elif action == "skip":
+        global active_riddle_timer
+        current_time = time.time()
+        if not active_riddle or (current_time - active_riddle_time >= 120):
+            try:
+                rcon_client.send_tellraw(player_clean, "§6[§5Oráculo§6] §cNo hay ningún enigma divino activo en este momento.")
+            except Exception:
+                pass
+            return
+            
+        if current_time - active_riddle_time >= 60: # 1 minuto
+            if active_riddle_timer:
+                active_riddle_timer.cancel()
+            active_riddle = None
+            try:
+                rcon_client.send_tellraw("@a", "§6[§5Oráculo§6] §7El Oráculo ha retirado su enigma. Las estrellas aguardan una nueva consulta.")
+            except Exception:
+                pass
+        else:
+            try:
+                rcon_client.send_tellraw(player_clean, "§6[§5Oráculo§6] §cEl enigma aún es reciente. Deben transcurrir 1 minuto antes de poder omitirlo.")
+            except Exception:
+                pass
+            return
 
     else:
         # Por defecto, localizar una estructura o responder conversacionalmente
@@ -840,7 +1103,7 @@ def process_chat_message(player: str, message: str) -> None:
                 try:
                     rcon_client.send_tellraw(
                         player_clean,
-                        f"§6[§5Oráculo§6] §cLas energías cósmicas aún no se alinean. Espera {remaining} segundos."
+                        f"§6[§5Oráculo§6] §cLas energías cósmicas aún no se alinean. Ten paciencia, mortal."
                     )
                 except Exception:
                     pass

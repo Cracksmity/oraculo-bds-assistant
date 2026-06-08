@@ -6,10 +6,11 @@ env/
 env.bak/
 .venv.bak/
 
-# Variables de entorno (¡CRUCIAL no subir!)
+# Variables de entorno y datos locales (¡CRUCIAL no subir!)
 .env
 .env.local
 .env.*.local
+devocion.json
 
 # Archivos de caché de Python
 __pycache__/
