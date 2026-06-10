@@ -79,6 +79,7 @@ except ValueError:
 last_query_times: Dict[str, float] = {}
 failed_requests_count: Dict[str, int] = {}
 punishment_count: Dict[str, int] = {}
+cooldown_spam_count: Dict[str, int] = {}
 
 # Estado del acertijo activo
 active_riddle: Optional[dict] = None
@@ -245,8 +246,33 @@ ITEM_CATEGORIES = [
     ("divine", 0.005, ["netherite", "elytra", "totem", "beacon", "shulker", "star", "dragon", "enchanted_golden_apple"]),
     ("rare", 0.05, ["diamond", "emerald", "gold", "pearl", "tnt", "obsidian", "crystal", "sword", "golden_apple"]),
     ("uncommon", 0.25, ["iron", "chainmail", "redstone", "lapis", "copper", "shears", "shield", "bow", "arrow"]),
+    ("potion", 0.15, ["potion"]),
     ("common", 0.60, [])  # Fallback
 ]
+
+# Mapeo de ítems con Data Values (para pociones en Bedrock)
+BEDROCK_ITEM_MAPPING = {
+    "potion_of_night_vision": ("potion", 5),
+    "potion_of_invisibility": ("potion", 7),
+    "potion_of_leaping": ("potion", 9),
+    "potion_of_fire_resistance": ("potion", 12),
+    "potion_of_swiftness": ("potion", 14),
+    "potion_of_slowness": ("potion", 17),
+    "potion_of_water_breathing": ("potion", 19),
+    "potion_of_healing": ("potion", 21),
+    "potion_of_harming": ("potion", 23),
+    "potion_of_poison": ("potion", 25),
+    "potion_of_regeneration": ("potion", 28),
+    "potion_of_strength": ("potion", 31),
+    "potion_of_weakness": ("potion", 34),
+    "potion_of_decay": ("potion", 36),
+    "potion_of_turtle_master": ("potion", 37),
+    "potion_of_slow_falling": ("potion", 40),
+    "splash_potion_of_regeneration": ("splash_potion", 28),
+    "splash_potion_of_healing": ("splash_potion", 21),
+    "splash_potion_of_poison": ("splash_potion", 25),
+    "splash_potion_of_weakness": ("splash_potion", 34)
+}
 
 def get_item_probability(item: str) -> float:
     """Retorna la probabilidad base de obtener un ítem usando clasificación ordenada por categorías."""
@@ -314,6 +340,35 @@ def check_cooldown(player: str) -> Optional[int]:
             return int(limit - elapsed)
     return None
 
+def handle_cooldown(player: str) -> bool:
+    """Verifica el cooldown y maneja el castigo por spam (Regla de Tres). Retorna True si debe abortar."""
+    remaining = check_cooldown(player)
+    if remaining is not None:
+        cooldown_spam_count[player] = cooldown_spam_count.get(player, 0) + 1
+        spam = cooldown_spam_count[player]
+        logger.info(f"Jugador '{player}' en cooldown. Spam count: {spam}/3. Restante: {remaining}s")
+        
+        if spam == 1:
+            try:
+                rcon_client.send_tellraw(player, "§6[§5Oráculo§6] §cLas estrellas aún se están alineando. Ten paciencia, mortal.")
+            except Exception:
+                pass
+        elif spam == 2:
+            try:
+                rcon_client.send_tellraw(player, "§6[§5Oráculo§6] §e¿Acaso eres sordo? He dicho que ESPERES. No tientes a tu suerte.")
+                rcon_client.execute_command(f"execute at \"{player}\" run summon lightning_bolt ~3 ~ ~3")
+            except Exception:
+                pass
+        elif spam >= 3:
+            cooldown_spam_count[player] = 0
+            execute_smite(player, "impatience_smited", "tiempo")
+            
+        return True
+        
+    # Cooldown expirado, resetear contador de spam
+    cooldown_spam_count[player] = 0
+    return False
+
 def execute_smite(player: str, reason_outcome: str, target_item: str = "") -> None:
     """Fulmina al jugador con un rayo divino (smite) y lo elimina del juego."""
     logger.warning(f"¡SMITE disparado para el jugador '{player}' debido a: {reason_outcome}!")
@@ -322,6 +377,9 @@ def execute_smite(player: str, reason_outcome: str, target_item: str = "") -> No
     if reason_outcome == "insult_smited":
         nueva_data = update_player_devocion(player, -150)
         increase_wrath(25)
+    elif reason_outcome == "impatience_smited":
+        nueva_data = update_player_devocion(player, -50)
+        increase_wrath(10)
     else:
         nueva_data = update_player_devocion(player, -100)
         increase_wrath(20)
@@ -359,16 +417,7 @@ def execute_smite(player: str, reason_outcome: str, target_item: str = "") -> No
 def process_item_request(player: str, item: str) -> None:
     """Maneja la lógica de petición de ítems con probabilidades, cooldown, codicia, castigos y devoción."""
     # 1. Verificar Cooldown
-    remaining = check_cooldown(player)
-    if remaining is not None:
-        logger.info(f"Jugador '{player}' está en cooldown para petición de ítem. Restante: {remaining}s")
-        try:
-            rcon_client.send_tellraw(
-                player,
-                f"§6[§5Oráculo§6] §cLas estrellas aún se están alineando. Ten paciencia, mortal."
-            )
-        except Exception:
-            pass
+    if handle_cooldown(player):
         return
 
     # Registrar tiempo de la consulta
@@ -403,7 +452,12 @@ def process_item_request(player: str, item: str) -> None:
         
         # Dar ítem
         try:
-            rcon_client.execute_command(f"give \"{player}\" {item} 1")
+            give_cmd = f"give \"{player}\" {item} 1"
+            if item.lower() in BEDROCK_ITEM_MAPPING:
+                mapped_item, mapped_data = BEDROCK_ITEM_MAPPING[item.lower()]
+                give_cmd = f"give \"{player}\" {mapped_item} 1 {mapped_data}"
+                
+            rcon_client.execute_command(give_cmd)
             rcon_client.execute_command(f"execute at \"{player}\" run playsound random.levelup @a")
             rcon_client.execute_command(f"execute at \"{player}\" run particle minecraft:totem_particle ~ ~1 ~")
         except Exception as e:
@@ -499,16 +553,7 @@ def process_item_request(player: str, item: str) -> None:
 
 def process_command(player: str, structure: str) -> None:
     """Orquesta la localización de estructuras."""
-    remaining = check_cooldown(player)
-    if remaining is not None:
-        logger.info(f"Jugador '{player}' en cooldown para locate. Restante: {remaining}s")
-        try:
-            rcon_client.send_tellraw(
-                player,
-                f"§6[§5Oráculo§6] §cLas energías cósmicas aún no se alinean. Ten paciencia, mortal."
-            )
-        except Exception:
-            pass
+    if handle_cooldown(player):
         return
 
     last_query_times[player] = time.time()
@@ -524,10 +569,14 @@ def process_command(player: str, structure: str) -> None:
     try:
         cmd = f"execute as \"{player}\" at @s run teleport @s ~ ~ ~"
         tp_response = rcon_client.execute_command(cmd)
+        logger.info(f"Respuesta cruda de teleport para '{player}': '{tp_response.strip()}'")
         match_p_coords = PLAYER_COORDS_PATTERN.search(tp_response)
         if match_p_coords:
             p_x = float(match_p_coords.group(1))
             p_z = float(match_p_coords.group(3))
+            logger.info(f"Coordenadas del jugador '{player}': X={p_x}, Z={p_z}")
+        else:
+            logger.warning(f"No se pudo extraer coordenadas del jugador de la respuesta: '{tp_response.strip()}'")
     except Exception as e:
         logger.warning(f"No se pudo obtener la posición del jugador '{player}': {e}")
 
@@ -535,14 +584,10 @@ def process_command(player: str, structure: str) -> None:
     rcon_response = ""
     try:
         cmd = f"execute as \"{player}\" at @s run locate structure {structure}"
-        rcon_response = rcon_client.execute_command(cmd)
+        # El locate puede tardar más que otros comandos; darle más tiempo
+        rcon_response = rcon_client.execute_command(cmd, max_wait=5.0)
         
-        # Si a futuro se migra el sistema de RCON (screen) a llamadas HTTP (Behavior Pack API):
-        # if hasattr(rcon_response, "status_code") and rcon_response.status_code != 200:
-        #     logger.error(f"El puente de Bedrock rechazó el comando. Status: {rcon_response.status_code}, Body: {rcon_response.text}")
-        #     return False
-            
-        logger.info(f"Respuesta cruda de Bedrock: '{rcon_response}'")
+        logger.info(f"Respuesta cruda de locate: '{rcon_response.strip()}'")
         
     except Exception as e:
         logger.error(f"Error CRÍTICO de ejecución o conexión al buscar estructura: {e}", exc_info=True)
@@ -561,12 +606,19 @@ def process_command(player: str, structure: str) -> None:
         s_x_str = match_coords.group(1)
         s_z_str = match_coords.group(2)
         dist_str = match_coords.group(3)
+        logger.info(f"Coordenadas de estructura extraídas: X={s_x_str}, Z={s_z_str}, Dist={dist_str}")
         try:
             s_x = float(s_x_str)
             s_z = float(s_z_str)
             distance = float(dist_str)
         except ValueError:
-            pass
+            logger.warning(f"Error al convertir coordenadas de estructura a float: X='{s_x_str}', Z='{s_z_str}', Dist='{dist_str}'")
+    else:
+        logger.warning(
+            f"COORDS_PATTERN no coincidió con la respuesta del locate. "
+            f"Respuesta: '{rcon_response.strip()}'. "
+            f"Patrón esperado: 'block X, (y?), Z (N blocks away)'"
+        )
 
     # Calcular rumbo/distancia euclidiana exacta
     if p_x is not None and p_z is not None and s_x is not None and s_z is not None:
@@ -574,6 +626,7 @@ def process_command(player: str, structure: str) -> None:
         direction = rel_pos["direction"]
         # Usamos siempre la distancia euclidiana calculada (pasos exactos) en lugar del string de Bedrock
         distance = rel_pos["distance"]
+        logger.info(f"Posición relativa calculada: {distance} pasos hacia {direction}")
 
     # Otorgar o restar devoción según si se encontró la estructura
     if match_coords:
@@ -583,6 +636,7 @@ def process_command(player: str, structure: str) -> None:
         except Exception:
             pass
     else:
+        logger.warning(f"Estructura '{structure}' NO encontrada para '{player}'. Se restará devoción.")
         nueva_data = update_player_devocion(player, -2)
         increase_wrath(1)
 
@@ -683,16 +737,7 @@ def process_ofrenda_request(player: str, item: str) -> None:
 def process_miracle_request(player: str, miracle_type: str) -> None:
     """Maneja los milagros ambientales (clima y tiempo) mediante devoción."""
     # 1. Verificar Cooldown
-    remaining = check_cooldown(player)
-    if remaining is not None:
-        logger.info(f"Jugador '{player}' está en cooldown para milagro. Restante: {remaining}s")
-        try:
-            rcon_client.send_tellraw(
-                player,
-                f"§6[§5Oráculo§6] §cEl cielo necesita descansar. Ten paciencia, mortal."
-            )
-        except Exception:
-            pass
+    if handle_cooldown(player):
         return
 
     # Registrar tiempo de la consulta

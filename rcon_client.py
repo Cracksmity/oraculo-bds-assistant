@@ -4,6 +4,7 @@ import time
 import os
 import subprocess
 import threading
+import tempfile
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -18,9 +19,14 @@ class RCONClient:
     Este cliente usa `screen -X stuff` para escribir en la consola del servidor
     y parsea el archivo server.log para obtener las respuestas.
 
+    Si el log file no contiene la salida del comando (lo cual ocurre cuando BDS
+    no escribe la salida de comandos al archivo de log, o cuando hay buffering
+    del sistema), se usa como fallback la captura directa del buffer de screen
+    mediante `screen -X hardcopy -h`.
+
     Requisitos:
         - El BDS debe correr dentro de una sesión screen.
-        - El BDS debe estar guardando su salida en un archivo de log.
+        - El BDS debe estar guardando su salida en un archivo de log (ideal, pero no estricto).
     """
 
     def __init__(
@@ -50,6 +56,9 @@ class RCONClient:
         self.screen_name: str = screen_name
         self.log_file: str = log_file
         self._lock: threading.Lock = threading.Lock()
+        self._screen_dump_path: str = os.path.join(
+            tempfile.gettempdir(), f"oraculo_hardcopy_{os.getpid()}.txt"
+        )
 
     def _get_log_size(self) -> int:
         """Obtiene el tamaño actual del archivo de log."""
@@ -66,6 +75,43 @@ class RCONClient:
                 return f.read()
         except OSError:
             return ""
+
+    def _capture_screen_lines(self) -> list:
+        """
+        Captura el buffer de scrollback de la sesión screen usando hardcopy -h.
+        Retorna una lista de líneas no vacías.
+        """
+        try:
+            subprocess.run(
+                [
+                    "screen", "-S", self.screen_name,
+                    "-p", "0", "-X", "hardcopy", "-h",
+                    self._screen_dump_path,
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            with open(self._screen_dump_path, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+            # Filtrar líneas vacías del padding de hardcopy
+            lines = [line for line in content.split('\n') if line.strip()]
+            return lines
+        except FileNotFoundError:
+            logger.warning("Comando 'screen' no encontrado. Captura de screen buffer no disponible.")
+            return []
+        except subprocess.CalledProcessError as e:
+            logger.debug(f"hardcopy falló (sesión screen podría no soportar -h): {e}")
+            return []
+        except Exception as e:
+            logger.debug(f"Error al capturar buffer de screen: {e}")
+            return []
+        finally:
+            try:
+                os.unlink(self._screen_dump_path)
+            except OSError:
+                pass
 
     def _send_to_screen(self, command: str) -> None:
         """Envía un comando a la sesión screen del BDS."""
@@ -126,21 +172,21 @@ class RCONClient:
         """No hay estado persistente que cerrar."""
         logger.info("Cliente BDS console finalizado.")
 
-    def execute_command(self, command: str) -> str:
+    def execute_command(self, command: str, max_wait: float = 3.0) -> str:
         """
-        Ejecuta un comando en la consola del BDS y retorna la salida del log.
+        Ejecuta un comando en la consola del BDS y retorna la salida.
 
-        El flujo es:
-            1. Marcar la posición actual del log.
-            2. Inyectar el comando en la sesión screen.
-            3. Esperar brevemente a que el servidor procese el comando.
-            4. Leer las líneas nuevas del log como respuesta.
+        Estrategia dual de lectura:
+            1. Intenta leer la respuesta del archivo de log del servidor (rápido).
+            2. Si el log no tiene salida nueva, captura el buffer de scrollback
+               de screen (hardcopy -h) y calcula las líneas nuevas.
 
         Args:
             command: Comando de Minecraft a ejecutar (sin '/').
+            max_wait: Tiempo máximo en segundos para esperar una respuesta (default: 3.0).
 
         Returns:
-            str: Las nuevas líneas del log que aparecieron tras ejecutar el comando.
+            str: La salida del comando (del log o del buffer de screen).
 
         Raises:
             ConnectionError: Si falla tras los reintentos.
@@ -148,12 +194,65 @@ class RCONClient:
         with self._lock:
             for attempt in range(1, self.max_retries + 1):
                 try:
+                    # --- Snapshot ANTES del comando ---
                     log_pos = self._get_log_size()
+                    pre_screen_lines = self._capture_screen_lines()
+
+                    # --- Enviar el comando ---
                     self._send_to_screen(command)
-                    # Esperar a que el servidor procese el comando y escriba la respuesta
-                    time.sleep(0.8)
-                    new_output = self._read_log_since(log_pos)
+
+                    # --- Polling: buscar salida en el log file ---
+                    poll_interval = 0.1
+                    elapsed = 0.0
+                    new_output = ""
+                    first_output_time = None
+
+                    while elapsed < max_wait:
+                        time.sleep(poll_interval)
+                        elapsed += poll_interval
+                        new_output = self._read_log_since(log_pos)
+
+                        if new_output.strip():
+                            if first_output_time is None:
+                                first_output_time = elapsed
+                            # Esperar un poco más para capturar respuestas multi-línea
+                            if elapsed - first_output_time >= 0.3:
+                                break
+
+                    # Si el log file tuvo salida, usarla
+                    if new_output.strip():
+                        return new_output
+
+                    # --- Fallback: capturar buffer de screen ---
+                    if pre_screen_lines:
+                        logger.debug(
+                            f"Log file sin salida para '{command[:60]}'. "
+                            f"Capturando buffer de screen..."
+                        )
+                        post_screen_lines = self._capture_screen_lines()
+
+                        if len(post_screen_lines) > len(pre_screen_lines):
+                            new_lines = post_screen_lines[len(pre_screen_lines):]
+                            # Filtrar la línea del comando en sí (el echo)
+                            cmd_short = command.strip()[:40]
+                            filtered = [
+                                line for line in new_lines
+                                if cmd_short not in line
+                            ]
+                            screen_output = '\n'.join(filtered)
+                            if screen_output.strip():
+                                logger.info(
+                                    f"Salida capturada del buffer de screen "
+                                    f"({len(filtered)} líneas nuevas)"
+                                )
+                                return screen_output
+
+                    logger.debug(
+                        f"Comando '{command[:60]}' no produjo salida "
+                        f"en log ni en screen tras {max_wait}s."
+                    )
                     return new_output
+
                 except Exception as e:
                     logger.warning(
                         f"Error al ejecutar comando '{command}' "

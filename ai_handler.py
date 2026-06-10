@@ -96,7 +96,7 @@ class AIHandler:
         self,
         player_name: str,
         item: str,
-        outcome: str,  # "success", "fail", "punished", "smited", "insult_smited"
+        outcome: str,  # "success", "fail", "punished", "smited", "insult_smited", "impatience_smited"
         effect: Optional[str] = None,
         devocion_rango: str = "Creyente"
     ) -> str:
@@ -162,6 +162,18 @@ class AIHandler:
                 f"El mortal '{player_name}' insultó al Oráculo y fue fulminado inmediatamente por un rayo. "
                 "Declara la sentencia fulminante y advierte a otros sobre la insolencia (máximo 2 oraciones)."
             )
+        elif outcome == "impatience_smited":
+            system_prompt = (
+                "Eres el Oráculo de un servidor de Minecraft Bedrock. Hablas en español, con un tono colérico, retumbante y poético. "
+                "Tus respuestas deben ser de máximo 2 oraciones. Un jugador ha colmado tu paciencia haciendo peticiones demasiado rápido (spam) ignorando tus advertencias. "
+                "Los dioses lo han fulminado directamente con un rayo divino (smite) quitándole la vida. "
+                "Dile de forma amenazante que su impaciencia y falta de respeto al tiempo divino ha sido castigada con la muerte. "
+                "Responde ÚNICAMENTE con la narrativa del oráculo. Tienes estrictamente prohibido incluir notas, clasificaciones, rangos entre paréntesis, o cualquier otro metadato al final de tu mensaje."
+            )
+            user_prompt = (
+                f"El mortal '{player_name}' fue demasiado impaciente e insistente. El rayo divino (smite) lo ha silenciado. "
+                "Redacta su castigo por no saber esperar los designios de los dioses (máximo 2 oraciones)."
+            )
         elif outcome == "fake_offering":
             system_prompt = (
                 "Eres el Oráculo de un servidor de Minecraft Bedrock. Hablas en español, con un tono místico, severo y poético. "
@@ -177,7 +189,7 @@ class AIHandler:
             return "Los astros guardan silencio."
 
         # Modificador de tono según la devoción del jugador (solo si no es fulminado directamente)
-        if outcome not in ("smited", "insult_smited"):
+        if outcome not in ("smited", "insult_smited", "impatience_smited"):
             tone_modifier = ""
             if devocion_rango == "Predilecto":
                 tone_modifier = " Este jugador tiene una devoción alta. Mantén tu tono misterioso, pero sé sutilmente benevolente, sin exagerar ni ser excesivamente amistoso."
@@ -205,7 +217,7 @@ class AIHandler:
             logger.error(f"Error al llamar a la API de OpenAI para ítem: {e}", exc_info=True)
             if outcome == "success":
                 return f"Los dioses son generosos, {player_name}. Disfruta de tu {item}."
-            elif outcome in ("punished", "smited", "insult_smited"):
+            elif outcome in ("punished", "smited", "insult_smited", "impatience_smited"):
                 return f"La ira cósmica ha caído sobre ti, {player_name}."
             else:
                 return "Los astros están nublados, intenta más tarde."
