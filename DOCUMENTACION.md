@@ -36,23 +36,39 @@ El archivo `devocion.json` es el "registro akáshico" de tu servidor, o en térm
 * **Cómo aumenta:** Superando acertijos o tirándole al Oráculo objetos de valor obsceno (diamantes, netherite). Comprando el favor divino a la antigua usanza.
 * **Cómo disminuye:** Creyendo que el Oráculo es una máquina expendedora (codicia) o respondiendo tonterías a los acertijos.
 
+### 🌩️ La Ira Divina Global (Castigo Colectivo)
+Cada vez que un hereje falla, comete un pecado o enfada al Oráculo, la "Ira Global" secreta aumenta. Cuando el vaso derrama la paciencia cósmica (100 puntos), se desata el **Apocalipsis en el servidor**: rayos cayendo sin parar, hordas de creepers que aparecen aleatoriamente cerca de los herejes, ceguera, fatiga minera y vómitos (náuseas). La única forma de frenar este evento antes de tiempo es que un alma arrepentida suplique clemencia en el chat. Hermoso trauma colectivo.
+
 ---
 
 ## 3. Tipos de Interacciones (Cómo mendigar a lo divino)
+
+### 🌍 El GPS Divino (Estructuras y Biomas)
+
+La plebe a menudo se pierde. Pueden pedirle al Oráculo que busque estructuras ("¿dónde hay una aldea?") o biomas naturales ("busco un desierto"). El Oráculo calculará las distancias y rumbos exactos usando algoritmos pitagóricos y la mismísima semilla (seed) del mundo, pero responderá con metáforas rebuscadas para que de igual forma les cueste llegar.
 
 ### 🧩 Acertijos para Mentes Simples
 
 Los jugadores pueden rogar por atención diciendo en el chat algo como: *"Oráculo, ponme a prueba"*.
 El sistema genera un acertijo. Si el mortal usa sus escasas neuronas para responder correctamente, se ejecutan comandos de caridad (`/weather clear`, regalos). Si fallan, reciben ceguera, monstruos y rayos, como manda la tradición.
 
-### 🩸 Diezmos y Sacrificios
+### 🩸 Diezmos, Peticiones y Sacrificios
 
-Cuando un jugador arroja su preciada basura frente al Oráculo, pasa esto:
+La plebe tiene dos formas principales de mendigar: arrojando basura en el mundo o usando los Altares Sagrados.
 
-1. El Addon lee el `itemId`.
-2. Se envía al backend.
-3. Gemini decide arbitrariamente el "valor espiritual" de ese puñado de píxeles.
-4. El sistema RCON dicta si el jugador recibe un regalo o si es castigado por ofrecer morralla.
+**1. El Cofre del Altar Sagrado (Rendimientos Decrecientes y Anti-Fraude):**
+El Oráculo ahora requiere un diseño específico para sus tributos diarios: un **Cofre colocado exactamente encima de un Bloque de Oro**. 
+*   **La Ley de Oferta y Demanda:** Para evitar que un granjero avaro deposite 10,000 bloques de tierra y se haga "Devoto" en 5 segundos, el sistema usa una penalización matemática (raíz cuadrada). Si ofrendas 64 diamantes, no te darán 64 veces el valor de un diamante, sino su raíz cuadrada por el multiplicador de demanda. El spam de un solo ítem tiene rendimientos decrecientes.
+*   **Anti-Fraude de Basura:** Si algún jugador chistoso deposita maleza, semillas o tierra (`TRASH_ITEMS`) dentro de este cofre divino, será fulminado automáticamente con un rayo como castigo por mancillar el altar, y perderá devoción.
+
+**2. Peticiones Específicas y Pociones:** La plebe puede exigir ítems e indicar cantidades (ej. "Dame 10 diamantes" o "Quiero 3 pociones de curación"). El Oráculo ahora entiende y reparte pociones específicas de Bedrock (usando su `Data Value`).
+Pero cuidado con la **Avaricia Mortal**: Si un hereje pide más de un stack (>64 ítems), será fulminado en el acto por su egoísmo crónico. Si es un jugador con Favor Divino, el castigo se "limitará" a ceguera y veneno.
+
+### 🚫 El Sistema Anti-Spam (Regla de Tres)
+Los mortales impacientes son una molestia. Existe un *cooldown* sagrado. Si intentan mendigar de nuevo sin esperar el tiempo estipulado, se aplica la Regla de Tres:
+1. **Primera vez:** Advertencia verbal sarcástica.
+2. **Segunda vez:** Rayo de advertencia cayendo a su lado y un merecido insulto por ignorantes.
+3. **Tercera vez:** Castigo letal inmediato (Smite). Cero tolerancia a la impaciencia.
 
 ---
 

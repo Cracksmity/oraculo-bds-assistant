@@ -24,10 +24,11 @@ class AIHandler:
     def generate_response(
         self,
         player_name: str,
-        structure: str,
+        target_name: str,
         distance: Optional[float] = None,
         direction: Optional[str] = None,
-        devocion_rango: str = "Creyente"
+        devocion_rango: str = "Creyente",
+        target_type: str = "structure"
     ) -> str:
         """
         Genera una respuesta del Oráculo indicando posiciones relativas.
@@ -35,28 +36,31 @@ class AIHandler:
         has_hints = distance is not None and direction is not None
 
         if has_hints:
+            target_context = "la estructura" if target_type == "structure" else "el bioma/tierras de"
             system_prompt = (
                 "Eres el Oráculo de un servidor de Minecraft Bedrock. Eres un ser ancestral, sabio, místico y enigmático. "
                 "Hablas siempre en español, con un tono poético, misterioso y sagrado. "
                 "Tus respuestas deben ser muy cortas y concisas: máximo 2 oraciones. "
                 "Debes incluir OBLIGATORIAMENTE la distancia exacta en 'pasos mortales' y la dirección cardinal provista en tu profecía. "
+                "Adapta tu lenguaje dependiendo de si el jugador busca una estructura antigua o unas tierras naturales (bioma). "
                 "Responde ÚNICAMENTE con la narrativa del oráculo. Tienes estrictamente prohibido incluir notas, clasificaciones, rangos entre paréntesis, o cualquier otro metadato al final de tu mensaje."
             )
             user_prompt = (
-                f"La estructura '{structure}' se encuentra exactamente a {distance} pasos mortales hacia el {direction} desde la posición del jugador '{player_name}'. "
+                f"El jugador '{player_name}' busca {target_context} '{target_name}', que se encuentra exactamente a {distance} pasos mortales hacia el {direction}. "
                 "Redacta la respuesta dándole estas direcciones relativas de forma mística y narrativa (máximo 2 oraciones)."
             )
         else:
-            # Caso en el que no se encontró la estructura
+            # Caso en el que no se encontró la estructura o bioma
+            target_context = "la estructura" if target_type == "structure" else "el bioma"
             system_prompt = (
                 "Eres el Oráculo de un servidor de Minecraft Bedrock. Eres un ser ancestral, sabio, místico y enigmático. "
                 "Hablas siempre en español, con un tono poético, misterioso y sagrado. "
                 "Tus respuestas deben ser muy cortas y concisas: máximo 2 oraciones. "
-                "Explica místicamente que tus visiones no alcanzan a percibir la estructura solicitada, o que esta se oculta en las sombras. "
+                "Explica místicamente que tus visiones no alcanzan a percibir el lugar o estructura solicitada, o que se oculta en las sombras. "
                 "Responde ÚNICAMENTE con la narrativa del oráculo. Tienes estrictamente prohibido incluir notas, clasificaciones, rangos entre paréntesis, o cualquier otro metadato al final de tu mensaje."
             )
             user_prompt = (
-                f"El mortal '{player_name}' busca la estructura '{structure}', pero la magia de localización ha fallado. "
+                f"El mortal '{player_name}' busca {target_context} '{target_name}', pero la magia de localización ha fallado. "
                 "Explica místicamente que este lugar está oculto de tu visión en un máximo de 2 oraciones en español."
             )
 
@@ -98,7 +102,8 @@ class AIHandler:
         item: str,
         outcome: str,  # "success", "fail", "punished", "smited", "insult_smited", "impatience_smited"
         effect: Optional[str] = None,
-        devocion_rango: str = "Creyente"
+        devocion_rango: str = "Creyente",
+        amount: int = 1
     ) -> str:
         """
         Genera respuestas místicas en español para la petición de ítems y sus consecuencias.
@@ -112,8 +117,8 @@ class AIHandler:
                 "Responde ÚNICAMENTE con la narrativa del oráculo. Tienes estrictamente prohibido incluir notas, clasificaciones, rangos entre paréntesis, o cualquier otro metadato al final de tu mensaje."
             )
             user_prompt = (
-                f"El mortal '{player_name}' ha pedido '{item}' y la fortuna divina le sonrió. "
-                "Anuncia con enigma que le has concedido el ítem (máximo 2 oraciones)."
+                f"El mortal '{player_name}' ha pedido la cantidad de {amount} de '{item}' y la fortuna divina le sonrió. "
+                "Anuncia con enigma que le has concedido su petición (máximo 2 oraciones)."
             )
         elif outcome == "fail":
             system_prompt = (
@@ -123,7 +128,7 @@ class AIHandler:
                 "Responde ÚNICAMENTE con la narrativa del oráculo. Tienes estrictamente prohibido incluir notas, clasificaciones, rangos entre paréntesis, o cualquier otro metadato al final de tu mensaje."
             )
             user_prompt = (
-                f"El mortal '{player_name}' pidió '{item}' pero la fortuna no le favorece. "
+                f"El mortal '{player_name}' pidió la cantidad de {amount} de '{item}' pero la fortuna no le favorece. "
                 "Niégale el ítem con palabras misteriosas sin sonar agresivo, sino sabio (máximo 2 oraciones)."
             )
         elif outcome == "punished":
@@ -135,7 +140,7 @@ class AIHandler:
                 "Responde ÚNICAMENTE con la narrativa del oráculo. Tienes estrictamente prohibido incluir notas, clasificaciones, rangos entre paréntesis, o cualquier otro metadato al final de tu mensaje."
             )
             user_prompt = (
-                f"El mortal '{player_name}' ha pecado de codicia al insistir en pedir '{item}' y ha sido castigado con '{effect}'. "
+                f"El mortal '{player_name}' ha pecado de codicia al insistir en pedir {amount} de '{item}' y ha sido castigado con '{effect}'. "
                 "Redacta su severa advertencia y describe místicamente su castigo de estado (máximo 2 oraciones)."
             )
         elif outcome == "smited":
@@ -174,6 +179,30 @@ class AIHandler:
                 f"El mortal '{player_name}' fue demasiado impaciente e insistente. El rayo divino (smite) lo ha silenciado. "
                 "Redacta su castigo por no saber esperar los designios de los dioses (máximo 2 oraciones)."
             )
+        elif outcome == "greed_smited":
+            system_prompt = (
+                "Eres el Oráculo de un servidor de Minecraft Bedrock. Hablas en español, con un tono colérico, retumbante, agresivo y poético. "
+                "Tus respuestas deben ser de máximo 2 oraciones. Un jugador ha ofendido a los dioses al pedir una cantidad absurdamente avara (más de un stack). "
+                "Los dioses lo han fulminado directamente con un rayo divino (smite) quitándole la vida. "
+                "Insulta su extrema avaricia y dile de forma amenazante que su codicia desmedida ha sido castigada con la muerte ardiente. "
+                "Responde ÚNICAMENTE con la narrativa del oráculo. Tienes estrictamente prohibido incluir notas, clasificaciones o metadatos."
+            )
+            user_prompt = (
+                f"El mortal '{player_name}' tuvo el descaro de pedir la inmensa cantidad de {amount} de '{item}'. El rayo divino (smite) lo ha silenciado. "
+                "Redacta su castigo por su asquerosa codicia mortal (máximo 2 oraciones)."
+            )
+        elif outcome == "greed_punished":
+            system_prompt = (
+                "Eres el Oráculo de un servidor de Minecraft Bedrock. Hablas en español, con un tono muy agresivo, severo y poético. "
+                "Tus respuestas deben ser de máximo 2 oraciones. Un jugador con 'Favor Divino' ha pedido una cantidad absurdamente avara (más de un stack). "
+                "Debido a su estatus, no lo has matado, pero le has impuesto ceguera y veneno. "
+                "Insulta agresivamente su codicia, advirtiéndole que ni siquiera su Favor Divino lo salvará de tu ira si sigue intentando saquear el cosmos. "
+                "Responde ÚNICAMENTE con la narrativa del oráculo. Tienes estrictamente prohibido incluir notas, clasificaciones o metadatos."
+            )
+            user_prompt = (
+                f"El mortal '{player_name}' intentó abusar pidiendo {amount} de '{item}'. Ha sido castigado con ceguera y veneno. "
+                "Redacta su agresiva advertencia sobre su repugnante avaricia (máximo 2 oraciones)."
+            )
         elif outcome == "fake_offering":
             system_prompt = (
                 "Eres el Oráculo de un servidor de Minecraft Bedrock. Hablas en español, con un tono místico, severo y poético. "
@@ -189,7 +218,7 @@ class AIHandler:
             return "Los astros guardan silencio."
 
         # Modificador de tono según la devoción del jugador (solo si no es fulminado directamente)
-        if outcome not in ("smited", "insult_smited", "impatience_smited"):
+        if outcome not in ("smited", "insult_smited", "impatience_smited", "greed_smited", "greed_punished"):
             tone_modifier = ""
             if devocion_rango == "Predilecto":
                 tone_modifier = " Este jugador tiene una devoción alta. Mantén tu tono misterioso, pero sé sutilmente benevolente, sin exagerar ni ser excesivamente amistoso."
@@ -217,7 +246,7 @@ class AIHandler:
             logger.error(f"Error al llamar a la API de OpenAI para ítem: {e}", exc_info=True)
             if outcome == "success":
                 return f"Los dioses son generosos, {player_name}. Disfruta de tu {item}."
-            elif outcome in ("punished", "smited", "insult_smited", "impatience_smited"):
+            elif outcome in ("punished", "smited", "insult_smited", "impatience_smited", "greed_smited", "greed_punished"):
                 return f"La ira cósmica ha caído sobre ti, {player_name}."
             else:
                 return "Los astros están nublados, intenta más tarde."
@@ -275,6 +304,162 @@ class AIHandler:
                 return f"Los cielos han cambiado para ti, {player_name}. Siente el poder divino."
             else:
                 return f"Tu fe es demasiado débil, {player_name}. El rayo marca mi advertencia."
+
+    def generate_wrath_end_response(self, canceled_by: Optional[str] = None) -> str:
+        """Genera el mensaje final de la Ira Global (natural o cancelada por un jugador)."""
+        if canceled_by:
+            system_prompt = (
+                "Eres el Oráculo de un servidor de Minecraft Bedrock. Hablas en español, con un tono imponente, divino y majestuoso. "
+                "La Ira de los Dioses (una tormenta apocalíptica) ha sido detenida antes de tiempo porque escuchaste las súplicas de un jugador devoto. "
+                "Redacta un mensaje poético reconociendo que los lamentos de ese jugador han sido escuchados y que tu furia se detiene, pero advierte que no olviden quién controla los cielos. "
+                "Responde ÚNICAMENTE con la narrativa del oráculo, máximo 2 o 3 oraciones. Tienes estrictamente prohibido incluir notas o metadatos."
+            )
+            user_prompt = f"La tormenta se detiene por las plegarias de '{canceled_by}'. Redacta tu mensaje de clausura."
+        else:
+            system_prompt = (
+                "Eres el Oráculo de un servidor de Minecraft Bedrock. Hablas en español, con un tono imponente, majestuoso y solemne. "
+                "Tu Ira Global (una tormenta apocalíptica de 60 segundos) acaba de terminar naturalmente. "
+                "Redacta un mensaje poético indicando que la tormenta se disipa por ahora, y advierte a los mortales que hayan aprendido a respetar tus designios y regresen a sus tierras. "
+                "Responde ÚNICAMENTE con la narrativa del oráculo, máximo 2 o 3 oraciones. Tienes estrictamente prohibido incluir notas o metadatos."
+            )
+            user_prompt = "La tormenta de tu ira ha concluido. Redacta tu mensaje final de advertencia a los mortales."
+
+        try:
+            logger.info(f"Enviando solicitud de mensaje final de ira a OpenAI ({self.model})...")
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                max_tokens=150,
+                temperature=0.8
+            )
+            ai_message = response.choices[0].message.content
+            if ai_message:
+                return ai_message.strip()
+            raise ValueError("La respuesta de OpenAI retornó vacía.")
+        except Exception as e:
+            logger.error(f"Error al generar respuesta de fin de ira: {e}", exc_info=True)
+            if canceled_by:
+                return f"Los lamentos de {canceled_by} han sido escuchados. Mi furia se detiene, pero no olviden quién controla los cielos."
+            else:
+                return "La tormenta se disipa... por ahora. Espero que hayan aprendido a respetar los designios del Oráculo. Regresen a sus tierras."
+
+    def generate_kill_response(
+        self,
+        requester: str,
+        victim: str,
+        outcome: str,
+        devocion_rango: str = "Creyente"
+    ) -> str:
+        """Genera respuesta mística para el comando de asesinato divino."""
+        if outcome == "success":
+            system_prompt = (
+                "Eres el Oráculo de un servidor de Minecraft Bedrock. Hablas en español con un tono oscuro, místico y arrogante. "
+                "Un mortal ha pedido el fin de otro y has concedido su retorcido deseo, arrebatando la vida de la víctima. "
+                "Redacta un mensaje poético y macabro celebrando el fin de la víctima. Máximo 2 oraciones."
+            )
+            user_prompt = f"El solicitante '{requester}' pidió matar a '{victim}' y la guadaña divina ha caído sobre él."
+        elif outcome == "creeper_punishment":
+            system_prompt = (
+                "Eres el Oráculo de Minecraft Bedrock. Hablas en español, con un tono burlón, macabro y divino. "
+                "Un mortal ha intentado usar tu poder para matar a otro, pero ha fallado estrepitosamente. "
+                "Como castigo a su osadía, has invocado una bestia explosiva (Creeper) a su lado. "
+                "Redacta una burla por su envidia y adviértele que la explosión es el precio de su avaricia. Máximo 2 oraciones."
+            )
+            user_prompt = f"'{requester}' intentó matar a '{victim}' pero falló. Se le castigó con un creeper explosivo."
+        elif outcome == "admin_smite":
+            system_prompt = (
+                "Eres el Oráculo de Minecraft Bedrock. Hablas en español con un tono majestuoso, apocalíptico y divino. "
+                "Un alto administrador (El Nexo Primordial) ha ordenado el fin de un mortal, y lo has desintegrado con un rayo. "
+                "Redacta un mensaje atronador anunciando que la voluntad suprema ha erradicado a la víctima. Máximo 2 oraciones."
+            )
+            user_prompt = f"El admin '{requester}' ordenó la muerte de '{victim}' y fue desintegrado por un rayo divino."
+        elif outcome == "admin_poison":
+            system_prompt = (
+                "Eres el Oráculo de Minecraft Bedrock. Hablas en español con un tono misterioso, perverso y divino. "
+                "Un administrador ordenó matar a un mortal con Favor Divino. En lugar de fulminarlo, lo has envenenado para dejarlo al borde de la muerte por diversión. "
+                "Redacta un mensaje sádico advirtiendo a la víctima que su Favor Divino apenas le compró unos segundos más de agonía. Máximo 2 oraciones."
+            )
+            user_prompt = f"El admin '{requester}' intentó matar a '{victim}'. Al ser '{victim}' un jugador bendecido, solo fue envenenado severamente."
+        elif outcome == "admin_denied":
+            system_prompt = (
+                "Eres el Oráculo de Minecraft Bedrock. Hablas en español con un tono altanero, místico e impredecible. "
+                "Un administrador intentó usar tu poder letal, pero por puro capricho divino (o por intentar matar a otro admin) te has negado poéticamente, sin castigarlo. "
+                "Redacta un mensaje diciendo que hoy la balanza de la muerte no se inclina para nadie, ni siquiera para los dioses. Máximo 2 oraciones."
+            )
+            user_prompt = f"El admin '{requester}' intentó matar a '{victim}' pero te negaste por capricho."
+        else:
+            return "Los hilos de la vida se enredan en el vacío."
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                max_tokens=150,
+                temperature=0.8
+            )
+            ai_message = response.choices[0].message.content
+            if ai_message:
+                return ai_message.strip()
+            return "El silencio cósmico reina."
+        except Exception as e:
+            logger.error(f"Error generando respuesta kill: {e}")
+            return "Las fuerzas de la muerte están ocupadas ahora mismo."
+
+    def generate_tp_response(
+        self,
+        requester: str,
+        destination: str,
+        outcome: str,
+        devocion_rango: str = "Creyente"
+    ) -> str:
+        """Genera respuesta mística para teletransporte."""
+        if outcome == "success":
+            system_prompt = (
+                "Eres el Oráculo de Minecraft Bedrock. Hablas en español con tono místico y misterioso. "
+                "Un jugador ha pedido que lo lleves a un lugar y las estrellas lo han concedido. "
+                "Dile poéticamente que el tejido del espacio se pliega para llevarlo a su destino. Máximo 2 oraciones."
+            )
+            user_prompt = f"El mortal '{requester}' pidió ir a '{destination}' y fue teletransportado con éxito."
+        elif outcome == "troll_sky":
+            system_prompt = (
+                "Eres el Oráculo de Minecraft Bedrock. Hablas en español con tono burlón, macabro y soberbio. "
+                "Un jugador pidió teletransporte pero falló. Por diversión, lo has arrojado desde las nubes (cientos de bloques en el cielo). "
+                "Dile que disfrute de su vuelo o caída libre por atreverse a exigir viajes cósmicos. Máximo 2 oraciones."
+            )
+            user_prompt = f"'{requester}' intentó ir a '{destination}' pero fue troleado y lanzado al cielo."
+        elif outcome == "troll_spawn":
+            system_prompt = (
+                "Eres el Oráculo de Minecraft Bedrock. Hablas en español con tono frío, altivo y divino. "
+                "Un jugador pidió teletransporte pero falló. Por capricho, lo has devuelto al origen (el Spawn del mundo). "
+                "Dile que antes de explorar nuevos horizontes, debe aprender a caminar desde el principio. Máximo 2 oraciones."
+            )
+            user_prompt = f"'{requester}' intentó ir a '{destination}' pero fue devuelto al spawn del mundo."
+        else:
+            return "El éter te rechaza."
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                max_tokens=150,
+                temperature=0.8
+            )
+            ai_message = response.choices[0].message.content
+            if ai_message:
+                return ai_message.strip()
+            return "El espacio se distorsiona."
+        except Exception as e:
+            logger.error(f"Error generando respuesta tp: {e}")
+            return "La magia de traslación está rota temporalmente."
 
     def generate_riddle(self) -> dict:
         """
@@ -428,15 +613,19 @@ class AIHandler:
             return current_riddle
 
     def classify_intent(self, query: str) -> dict:
-        """Clasifica si un mensaje es conversacional, una petición de estructura, ofrenda, o milagro."""
+        """Clasifica si un mensaje es conversacional, una petición de estructura, buscar bioma, ofrenda, o milagro."""
         system_prompt = (
             "Eres un clasificador de intenciones para un bot de Minecraft. "
-            "Debes clasificar el mensaje del usuario y devolver un objeto JSON estricto con las siguientes claves: 'intent', 'target_structure', 'target_item' y 'miracle_type'.\n"
-            "- 'intent': 'CHAT' (conversacional), 'SEARCH' (buscar estructura), 'OFFERING' (sacrificar/regalar ítem), 'PETITION' (pedir ítem), o 'MIRACLE' (cambiar el clima o tiempo).\n"
-            "- ¡CRÍTICO! No confundas MIRACLE con PETITION. PETITION es solo para pedir objetos/ítems físicos para el inventario. Si el usuario pide manipular el entorno (hacer de día, de noche, que llueva, pare de llover, sol, tormenta), es estrictamente MIRACLE.\n"
+            "Debes clasificar el mensaje del usuario y devolver un objeto JSON estricto con las siguientes claves: 'intent', 'target_structure', 'target_item', 'miracle_type', 'target_biome', 'amount', 'target_player' y 'destination'.\n"
+            "- 'intent': 'CHAT' (conversacional), 'SEARCH' (buscar estructura), 'SEARCH_BIOME' (buscar un bioma o entorno natural), 'OFFERING' (sacrificar/regalar ítem), 'PETITION' (pedir ítem), 'MIRACLE' (cambiar el clima o tiempo), 'CANCEL_WRATH' (pedir que se detenga la ira, tormenta o castigo global), 'KILL_PLAYER' (pedir matar a alguien) o 'TELEPORT' (pedir ir a un lugar o teletransporte).\n"
+            "- ¡CRÍTICO! No confundas MIRACLE con PETITION ni SEARCH con SEARCH_BIOME. Usa SEARCH_BIOME para desierto, selva, pantano, nieve, etc. Usa CANCEL_WRATH si suplican perdón o que acabe la ira/tormenta.\n"
             "- 'target_structure': Identificador de Bedrock en inglés si es SEARCH, null en otro caso.\n"
+            "- 'target_biome': Identificador de Bedrock en inglés si es SEARCH_BIOME (ej: desert, jungle, swamp, plains, taiga, etc.), null en otro caso.\n"
             "- 'target_item': Identificador de Bedrock en inglés si es OFFERING o PETITION, null en otro caso.\n"
             "- 'miracle_type': Si 'intent' es 'MIRACLE', extrae el tipo de milagro ambiental con valores estrictos: 'day', 'night', 'clear', 'rain', o 'thunder'. En otro caso, null.\n"
+            "- 'amount': Un número entero que representa la cantidad solicitada si 'intent' es 'PETITION'. Si no se menciona cantidad, o para otros intents, el valor por defecto debe ser 1.\n"
+            "- 'target_player': Si 'intent' es 'KILL_PLAYER', extrae el nombre del jugador o entidad que desean que muera. En otro caso, null.\n"
+            "- 'destination': Si 'intent' es 'TELEPORT', extrae el destino al que quieren ir. En otro caso, null.\n"
             "Responde ÚNICAMENTE con el objeto JSON válido."
         )
         try:
@@ -454,10 +643,10 @@ class AIHandler:
             if ai_message:
                 import json
                 return json.loads(ai_message.strip())
-            return {"intent": "SEARCH", "target_structure": query, "target_item": None, "miracle_type": None}
+            return {"intent": "SEARCH", "target_structure": query, "target_item": None, "miracle_type": None, "target_biome": None, "amount": 1, "target_player": None, "destination": None}
         except Exception as e:
             logger.error(f"Error en classify_intent: {e}")
-            return {"intent": "SEARCH", "target_structure": query, "target_item": None, "miracle_type": None}
+            return {"intent": "SEARCH", "target_structure": query, "target_item": None, "miracle_type": None, "target_biome": None, "amount": 1, "target_player": None, "destination": None}
 
     def generate_conversational_response(self, player_name: str, message: str, devocion_rango: str) -> str:
         """Genera una respuesta conversacional mística sin buscar estructuras."""

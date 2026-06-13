@@ -4,7 +4,7 @@
     "name": "Oráculo Bridge",
     "description": "Puente de comunicación entre el chat de Minecraft Bedrock y el bot Oráculo. Captura mensajes del chat y eventos de jugadores, y los reenvía al bot via HTTP.",
     "uuid": "7f8e9d0c-1b2a-4c3d-8e5f-6a7b8c9d0e1f",
-    "version": [1, 0, 1],
+    "version": [1, 0, 2],
     "min_engine_version": [1, 26, 0]
   },
   "modules": [
@@ -13,7 +13,7 @@
       "language": "javascript",
       "uuid": "3a4b5c6d-7e8f-4a9b-8c1d-2e3f4a5b6c7d",
       "entry": "scripts/main.js",
-      "version": [1, 0, 1]
+      "version": [1, 0, 2]
     }
   ],
   "dependencies": [

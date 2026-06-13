@@ -24,6 +24,7 @@ class WebhookServer:
         port: int = 5050,
         chat_callback: Optional[Callable[[str, str], None]] = None,
         event_callback: Optional[Callable[[str, str], None]] = None,
+        biome_result_callback: Optional[Callable[[dict], None]] = None,
         secret: Optional[str] = None,
     ) -> None:
         """
@@ -33,11 +34,14 @@ class WebhookServer:
             port: Puerto en el que escuchará el servidor HTTP.
             chat_callback: Función que recibe (player: str, message: str) al llegar un mensaje de chat.
             event_callback: Función que recibe (event_type: str, player: str) al llegar un evento.
+            biome_result_callback: Función que recibe (data: dict) con el resultado de validación
+                de tamaño de bioma enviado por el Behavior Pack.
             secret: Secreto opcional para validar la autenticidad de las peticiones.
         """
         self.port: int = port
         self.chat_callback: Optional[Callable[[str, str], None]] = chat_callback
         self.event_callback: Optional[Callable[[str, str], None]] = event_callback
+        self.biome_result_callback: Optional[Callable[[dict], None]] = biome_result_callback
         self.secret: Optional[str] = secret
 
         # Crear la aplicación Flask y reducir los logs internos de werkzeug
@@ -119,6 +123,30 @@ class WebhookServer:
 
             return jsonify({"status": "ok"}), 200
 
+        @self.app.route("/biome-result", methods=["POST"])
+        def handle_biome_result():
+            """Recibe el resultado de validación de tamaño de bioma del Behavior Pack."""
+            data = request.get_json(silent=True)
+            if not data:
+                return jsonify({"error": "invalid json"}), 400
+
+            logger.info(
+                f"[Webhook /biome-result] Resultado recibido: "
+                f"biome={data.get('biome')}, matchCount={data.get('matchCount')}, "
+                f"isLarge={data.get('isLarge')}"
+            )
+
+            if self.biome_result_callback:
+                try:
+                    self.biome_result_callback(data)
+                except Exception as e:
+                    logger.error(
+                        f"Error al procesar biome_result_callback: {e}",
+                        exc_info=True,
+                    )
+
+            return jsonify({"status": "ok"}), 200
+
         @self.app.route("/health", methods=["GET"])
         def health():
             """Health check básico."""
@@ -133,7 +161,7 @@ class WebhookServer:
             f"Iniciando Webhook Server del Oráculo en 0.0.0.0:{self.port}..."
         )
         logger.info(
-            f"Endpoints disponibles: POST /chat, POST /event, GET /health"
+            f"Endpoints disponibles: POST /chat, POST /event, POST /biome-result, GET /health"
         )
         self.app.run(
             host="0.0.0.0",
