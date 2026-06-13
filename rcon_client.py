@@ -93,23 +93,38 @@ class RCONClient:
                 text=True,
                 timeout=5,
             )
+        except FileNotFoundError:
+            logger.warning("Comando 'screen' no encontrado en el sistema. Captura de screen buffer no disponible.")
+            return []
+        except subprocess.CalledProcessError as e:
+            logger.debug(f"hardcopy falló (sesión screen podría no soportar -h): {e}")
+            return []
+        except Exception as e:
+            logger.debug(f"Error al solicitar captura a screen: {e}")
+            return []
+
+        # El comando 'screen -X' es asíncrono. Esperamos a que el archivo se genere.
+        for _ in range(10):
+            if os.path.exists(self._screen_dump_path):
+                break
+            time.sleep(0.05)
+
+        try:
             with open(self._screen_dump_path, "r", encoding="utf-8", errors="replace") as f:
                 content = f.read()
             # Filtrar líneas vacías del padding de hardcopy
             lines = [line for line in content.split('\n') if line.strip()]
             return lines
         except FileNotFoundError:
-            logger.warning("Comando 'screen' no encontrado. Captura de screen buffer no disponible.")
-            return []
-        except subprocess.CalledProcessError as e:
-            logger.debug(f"hardcopy falló (sesión screen podría no soportar -h): {e}")
+            logger.debug("El archivo de hardcopy no fue generado por screen a tiempo.")
             return []
         except Exception as e:
-            logger.debug(f"Error al capturar buffer de screen: {e}")
+            logger.debug(f"Error al leer archivo de hardcopy: {e}")
             return []
         finally:
             try:
-                os.unlink(self._screen_dump_path)
+                if os.path.exists(self._screen_dump_path):
+                    os.unlink(self._screen_dump_path)
             except OSError:
                 pass
 

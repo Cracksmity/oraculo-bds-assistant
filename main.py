@@ -546,6 +546,15 @@ ITEM_CATEGORIES = [
 
 # Mapeo de ítems con Data Values (para pociones en Bedrock)
 BEDROCK_ITEM_MAPPING = {
+    "axe": ("iron_axe", 0),
+    "sword": ("iron_sword", 0),
+    "pickaxe": ("iron_pickaxe", 0),
+    "shovel": ("iron_shovel", 0),
+    "hoe": ("iron_hoe", 0),
+    "helmet": ("iron_helmet", 0),
+    "chestplate": ("iron_chestplate", 0),
+    "leggings": ("iron_leggings", 0),
+    "boots": ("iron_boots", 0),
     "potion_of_night_vision": ("potion", 5),
     "potion_of_invisibility": ("potion", 7),
     "potion_of_leaping": ("potion", 9),
@@ -1428,16 +1437,22 @@ def process_answer_request(player: str, answer: str) -> None:
         puntos_base = {"facil": 20, "normal": 50, "dificil": 100}.get(difficulty, 50)
         puntos_ganados = max(5, puntos_base - (hint_level * 10))
         
+        rare_items = ["diamond", "emerald", "gold_ingot", "ender_pearl", "obsidian", "golden_apple"]
+        uncommon_items = ["iron_ingot", "redstone", "lapis_lazuli", "copper_ingot", "arrow"]
+        common_items = ["bread", "cooked_beef", "torch", "coal"]
+
         if difficulty == "facil":
-            item_recompensa = "iron_ingot" if hint_level == 0 else "copper_ingot"
-            cant = 3
+            pool = uncommon_items if hint_level == 0 else common_items
+            item_recompensa = random.choice(pool)
+            cant = random.randint(3, 8)
         elif difficulty == "dificil":
-            item_recompensa = "diamond" if hint_level < 2 else "gold_ingot"
-            cant = 1
+            pool = rare_items if hint_level < 2 else uncommon_items
+            item_recompensa = random.choice(pool)
+            cant = random.randint(1, 3)
         else: # normal
-            recompensas_normales = ["gold_ingot", "emerald"] if hint_level == 0 else ["iron_ingot", "lapis_lazuli"]
-            item_recompensa = random.choice(recompensas_normales)
-            cant = 3 if item_recompensa in ["gold_ingot", "iron_ingot"] else 1
+            pool = rare_items if hint_level == 0 else uncommon_items
+            item_recompensa = random.choice(pool)
+            cant = random.randint(2, 5)
 
         # Multiplicador por tiempo (Time-Attack)
         efecto_bendicion = "haste 300 1" # Default
@@ -1906,6 +1921,8 @@ def process_chat_message(player: str, message: str) -> None:
                     pass
                 return
             process_teleport_request(player_clean, destination)
+        elif intent == "RIDDLE":
+            process_riddle_request(player_clean)
         elif intent == "CANCEL_WRATH":
             global is_wrath_active, wrath_canceled_by_player
             if not is_wrath_active:

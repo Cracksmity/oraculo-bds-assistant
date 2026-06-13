@@ -49,8 +49,10 @@ La plebe a menudo se pierde. Pueden pedirle al Oráculo que busque estructuras (
 
 ### 🧩 Acertijos para Mentes Simples
 
-Los jugadores pueden rogar por atención diciendo en el chat algo como: *"Oráculo, ponme a prueba"*.
-El sistema genera un acertijo. Si el mortal usa sus escasas neuronas para responder correctamente, se ejecutan comandos de caridad (`/weather clear`, regalos). Si fallan, reciben ceguera, monstruos y rayos, como manda la tradición.
+Los jugadores pueden rogar por atención usando lenguaje natural (ej. *"Oráculo, dame un acertijo"* o *"Quiero resolver un enigma"*). La IA detectará dinámicamente la intención de ser puesto a prueba.
+El sistema genera un acertijo único (o selecciona uno de respaldo si los astros se alinean mal). 
+Si el mortal usa sus escasas neuronas para responder correctamente (incluso con sinónimos conceptuales), se ejecutan comandos de caridad (`/weather clear`, recompensas dinámicas de oro, diamante u otros minerales según la dificultad). 
+Si fallan, reciben ceguera, monstruos, rayos, y una burla mística que **ahora incluye sutilmente una pista poética** para ayudarles en su siguiente intento, como manda la tradición.
 
 ### 🩸 Diezmos, Peticiones y Sacrificios
 
