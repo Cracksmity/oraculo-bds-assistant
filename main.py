@@ -249,14 +249,12 @@ def save_devocion(db: dict) -> None:
                 )
                 players_to_keep.append(player_key)
 
-            if players_to_keep:
-                placeholders = ",".join(["?"] * len(players_to_keep))
-                conn.execute(
-                    f"DELETE FROM devotion WHERE player NOT IN ({placeholders})",
-                    players_to_keep
-                )
-            else:
-                conn.execute("DELETE FROM devotion")
+            existing_players = {
+                row[0] for row in conn.execute("SELECT player FROM devotion").fetchall()
+            }
+            stale_players = existing_players - set(players_to_keep)
+            for stale_player in stale_players:
+                conn.execute("DELETE FROM devotion WHERE player = ?", (stale_player,))
             conn.commit()
     except Exception as e:
         logger.error(f"Error al guardar {DEVOCION_DB_FILE}: {e}")

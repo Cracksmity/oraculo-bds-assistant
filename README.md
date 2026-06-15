@@ -48,7 +48,7 @@ El sistema opera en dos frentes que se comunican en tiempo real:
 ### Requisitos Previos
 *   Python 3.8 o superior.
 *   Servidor Bedrock Dedicated Server (BDS) con **Beta APIs habilitadas**.
-    *   Restricción técnica de compatibilidad estable: el Behavior Pack actual depende de `@minecraft/server@2.8.0-beta` y `@minecraft/server-net@1.0.0-beta`; no cambies esas versiones en `oraculo_bridge/manifest.json` mientras se mantenga este puente.
+    *   Restricción técnica de compatibilidad estable: el puente `scripts/main.js` fue probado contra `@minecraft/server@2.8.0-beta` y `@minecraft/server-net@1.0.0-beta`; cambiarlas puede romper eventos de chat/HTTP y cortar la comunicación con Python. Mantén esas versiones en `oraculo_bridge/manifest.json` hasta validar una migración completa en un entorno de pruebas.
 *   Acceso a RCON activado en `server.properties` (`enable-rcon=true`).
 *   Una API Key válida de [OpenAI](https://platform.openai.com/).
 
