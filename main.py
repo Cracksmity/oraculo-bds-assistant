@@ -130,10 +130,15 @@ def _get_devocion_connection() -> sqlite3.Connection:
     return sqlite3.connect(DEVOCION_DB_FILE, timeout=10)
 
 def _migrate_legacy_devocion_if_needed(conn: sqlite3.Connection) -> None:
+    """Migra una sola vez los datos de devocion.json a SQLite si la tabla está vacía."""
     if not os.path.exists(DEVOCION_LEGACY_FILE):
         return
 
-    count = conn.execute("SELECT COUNT(*) FROM devotion").fetchone()[0]
+    try:
+        count = conn.execute("SELECT COUNT(*) FROM devotion").fetchone()[0]
+    except sqlite3.OperationalError as e:
+        logger.error(f"No se pudo verificar el estado de la tabla devotion: {e}")
+        return
     if count > 0:
         return
 
@@ -175,6 +180,7 @@ def _migrate_legacy_devocion_if_needed(conn: sqlite3.Connection) -> None:
         logger.info(f"Migración completada: {migrated} jugadores movidos de {DEVOCION_LEGACY_FILE} a {DEVOCION_DB_FILE}.")
 
 def _ensure_devocion_storage() -> None:
+    """Inicializa SQLite de devoción, ejecuta migración legacy y garantiza jugadores con favor divino."""
     try:
         with _get_devocion_connection() as conn:
             conn.execute(
@@ -202,7 +208,7 @@ def _ensure_devocion_storage() -> None:
     except Exception as e:
         logger.error(f"Error al inicializar almacenamiento de devoción SQLite: {e}")
 
-def load_devocion() -> dict:
+def load_devocion() -> Dict[str, dict]:
     _ensure_devocion_storage()
     try:
         with _get_devocion_connection() as conn:
