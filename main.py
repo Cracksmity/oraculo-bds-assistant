@@ -225,10 +225,11 @@ def save_devocion(db: dict) -> None:
     _ensure_devocion_storage()
     try:
         with _get_devocion_connection() as conn:
-            conn.execute("DELETE FROM devotion")
+            players_to_keep: List[str] = []
             for player, data in db.items():
                 if not isinstance(data, dict):
                     continue
+                player_key = str(player)
                 try:
                     puntos = int(data.get("puntos", 50))
                 except (TypeError, ValueError):
@@ -244,8 +245,18 @@ def save_devocion(db: dict) -> None:
                     INSERT OR REPLACE INTO devotion (player, puntos, rango, ultima_ofrenda)
                     VALUES (?, ?, ?, ?)
                     """,
-                    (str(player), puntos, rango, ultima_ofrenda),
+                    (player_key, puntos, rango, ultima_ofrenda),
                 )
+                players_to_keep.append(player_key)
+
+            if players_to_keep:
+                placeholders = ",".join(["?"] * len(players_to_keep))
+                conn.execute(
+                    f"DELETE FROM devotion WHERE player NOT IN ({placeholders})",
+                    players_to_keep
+                )
+            else:
+                conn.execute("DELETE FROM devotion")
             conn.commit()
     except Exception as e:
         logger.error(f"Error al guardar {DEVOCION_DB_FILE}: {e}")
