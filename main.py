@@ -127,6 +127,7 @@ DEVOCION_DB_FILE = "devocion.db"
 DEVOCION_LEGACY_FILE = "devocion.json"
 
 def _get_devocion_connection() -> sqlite3.Connection:
+    """Crea una conexión SQLite de corta vida para uso local por operación."""
     return sqlite3.connect(DEVOCION_DB_FILE, timeout=10)
 
 def _migrate_legacy_devocion_if_needed(conn: sqlite3.Connection) -> None:
@@ -157,11 +158,13 @@ def _migrate_legacy_devocion_if_needed(conn: sqlite3.Connection) -> None:
     for player, data in legacy_db.items():
         if not isinstance(data, dict):
             continue
+        default_points = 500 if str(player) in DIVINE_FAVOR_PLAYERS else 50
+        default_rank = "Predilecto" if str(player) in DIVINE_FAVOR_PLAYERS else "Dudoso"
         try:
-            puntos = int(data.get("puntos", 50))
+            puntos = int(data.get("puntos", default_points))
         except (TypeError, ValueError):
-            puntos = 50
-        rango = str(data.get("rango", "Dudoso"))
+            puntos = default_points
+        rango = str(data.get("rango", default_rank))
         try:
             ultima_ofrenda = float(data.get("ultima_ofrenda", 0.0))
         except (TypeError, ValueError):
@@ -259,8 +262,11 @@ def save_devocion(db: dict) -> None:
                 row[0] for row in conn.execute("SELECT player FROM devotion").fetchall()
             }
             stale_players = existing_players - set(players_to_keep)
-            for stale_player in stale_players:
-                conn.execute("DELETE FROM devotion WHERE player = ?", (stale_player,))
+            if stale_players:
+                conn.executemany(
+                    "DELETE FROM devotion WHERE player = ?",
+                    [(stale_player,) for stale_player in stale_players]
+                )
             conn.commit()
     except Exception as e:
         logger.error(f"Error al guardar {DEVOCION_DB_FILE}: {e}")
