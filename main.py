@@ -158,8 +158,9 @@ def _migrate_legacy_devocion_if_needed(conn: sqlite3.Connection) -> None:
     for player, data in legacy_db.items():
         if not isinstance(data, dict):
             continue
-        default_points = 500 if str(player) in DIVINE_FAVOR_PLAYERS else 50
-        default_rank = "Predilecto" if str(player) in DIVINE_FAVOR_PLAYERS else "Dudoso"
+        player_key = str(player)
+        default_points = 500 if player_key in DIVINE_FAVOR_PLAYERS else 50
+        default_rank = "Predilecto" if player_key in DIVINE_FAVOR_PLAYERS else "Dudoso"
         try:
             puntos = int(data.get("puntos", default_points))
         except (TypeError, ValueError):
@@ -175,7 +176,7 @@ def _migrate_legacy_devocion_if_needed(conn: sqlite3.Connection) -> None:
             INSERT OR REPLACE INTO devotion (player, puntos, rango, ultima_ofrenda)
             VALUES (?, ?, ?, ?)
             """,
-            (str(player), puntos, rango, ultima_ofrenda),
+            (player_key, puntos, rango, ultima_ofrenda),
         )
         migrated += 1
 
@@ -234,7 +235,6 @@ def save_devocion(db: dict) -> None:
     _ensure_devocion_storage()
     try:
         with _get_devocion_connection() as conn:
-            players_to_keep: List[str] = []
             for player, data in db.items():
                 if not isinstance(data, dict):
                     continue
@@ -255,17 +255,6 @@ def save_devocion(db: dict) -> None:
                     VALUES (?, ?, ?, ?)
                     """,
                     (player_key, puntos, rango, ultima_ofrenda),
-                )
-                players_to_keep.append(player_key)
-
-            existing_players = {
-                row[0] for row in conn.execute("SELECT player FROM devotion").fetchall()
-            }
-            stale_players = existing_players - set(players_to_keep)
-            if stale_players:
-                conn.executemany(
-                    "DELETE FROM devotion WHERE player = ?",
-                    [(stale_player,) for stale_player in stale_players]
                 )
             conn.commit()
     except Exception as e:
