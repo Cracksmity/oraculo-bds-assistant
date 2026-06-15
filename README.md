@@ -2,9 +2,9 @@
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
 ![Minecraft](https://img.shields.io/badge/Minecraft%20Bedrock-Dedicated%20Server-green)
-![Gemini Pro](https://img.shields.io/badge/AI-Google%20Gemini%20Pro-orange)
+![OpenAI](https://img.shields.io/badge/AI-OpenAI-orange)
 
-**Oráculo BDS Assistant** es un sistema de asistencia avanzado y misterioso impulsado por inteligencia artificial para servidores de Minecraft Bedrock (BDS). Diseñado con una arquitectura híbrida (Webhooks + RCON + Google Gemini Pro), este bot introduce una deidad interactiva en tu mundo: **El Oráculo**.
+**Oráculo BDS Assistant** es un sistema de asistencia avanzado y misterioso impulsado por inteligencia artificial para servidores de Minecraft Bedrock (BDS). Diseñado con una arquitectura híbrida (Webhooks + RCON + OpenAI), este bot introduce una deidad interactiva en tu mundo: **El Oráculo**.
 
 El Oráculo es capaz de entender lenguaje natural, juzgar las acciones de los jugadores, proponer acertijos, exigir sacrificios y, en última instancia, manipular el mismísimo clima y la vida en el servidor.
 
@@ -12,7 +12,7 @@ El Oráculo es capaz de entender lenguaje natural, juzgar las acciones de los ju
 
 ## ✨ Características Principales
 
-*   **🗣️ Interacción Divina (Gemini Pro):** Respuestas inmersivas y místicas en el chat del juego. El Oráculo comprende el contexto y las intenciones de los jugadores mediante procesamiento de lenguaje natural.
+*   **🗣️ Interacción Divina (OpenAI):** Respuestas inmersivas y místicas en el chat del juego. El Oráculo comprende el contexto y las intenciones de los jugadores mediante procesamiento de lenguaje natural.
 *   **⚖️ Sistema de Devoción:** Cada jugador tiene un nivel de "favor" con los dioses. Completa pruebas o sé castigado según tus actos.
 *   **🌪️ Ira Divina Global:** Evento apocalíptico para todo el servidor (rayos, ceguera, tormentas) que se desata al colmar la paciencia cósmica. Los devotos pueden detenerla mediante súplicas.
 *   **🌍 Clarividencia de Biomas y Estructuras:** El Oráculo puede localizar biomas naturales y estructuras antiguas, guiándote con coordenadas relativas y rumbos místicos.
@@ -30,10 +30,10 @@ El sistema opera en dos frentes que se comunican en tiempo real:
 1.  **🧠 El Cerebro (Python - Servidor local/VPS):**
     Gestiona la lógica pesada, la IA y las respuestas.
     *   `main.py`: El corazón del sistema. Coordina los endpoints de Webhook y los envíos por RCON.
-    *   `ai_handler.py`: Interfaz con Gemini Pro. Clasifica intenciones (charlas, clima, sacrificios, biomas) y moldea la personalidad del Oráculo.
+    *   `ai_handler.py`: Interfaz con OpenAI. Clasifica intenciones (charlas, clima, sacrificios, biomas) y moldea la personalidad del Oráculo.
     *   `biome_finder.py`: Sistema automatizado para el cálculo de distancias a biomas basado en la semilla del mundo.
     *   `rcon_client.py`: Puente asíncrono para inyectar comandos directamente en la consola del BDS.
-    *   `devocion.json`: Base de datos de jugadores que registra sus niveles de favor divino y progreso.
+    *   `devocion.db` (SQLite): Base de datos de jugadores que registra sus niveles de favor divino y progreso. Si existe `devocion.json`, se migra automáticamente al primer arranque.
 
 2.  **👁️ Los Ojos y Oídos (JavaScript - Behavior Pack):**
     Ubicado en `oraculo_bridge/`. Se ejecuta dentro del mundo de Minecraft.
@@ -47,9 +47,12 @@ El sistema opera en dos frentes que se comunican en tiempo real:
 
 ### Requisitos Previos
 *   Python 3.8 o superior.
-*   Servidor Bedrock Dedicated Server (BDS) con **Beta APIs habilitadas** (o las APIs estables necesarias para script-net).
+*   Servidor Bedrock Dedicated Server (BDS) con **Beta APIs habilitadas**.
+    *   Restricción técnica de compatibilidad estable: el puente `scripts/main.js` fue probado contra `@minecraft/server@2.8.0-beta` y `@minecraft/server-net@1.0.0-beta`.
+    *   Cambiar esas versiones puede romper eventos de chat/HTTP y cortar la comunicación con Python.
+    *   Mantén esas versiones en `oraculo_bridge/manifest.json` hasta validar una migración completa en un entorno de pruebas.
 *   Acceso a RCON activado en `server.properties` (`enable-rcon=true`).
-*   Una API Key válida de [Google AI Studio (Gemini)](https://aistudio.google.com/).
+*   Una API Key válida de [OpenAI](https://platform.openai.com/).
 
 ### Instalación Paso a Paso
 
@@ -62,7 +65,7 @@ El sistema opera en dos frentes que se comunican en tiempo real:
     Crea un archivo `.env` en la raíz (agrega tus credenciales). Este archivo es ignorado por seguridad:
     ```env
     # API Keys
-    GOOGLE_API_KEY=tu_api_key_aqui
+    OPENAI_API_KEY=tu_api_key_aqui
 
     # Configuración del Servidor y Mundo
     WORLD_SEED=tu_semilla_del_mundo
