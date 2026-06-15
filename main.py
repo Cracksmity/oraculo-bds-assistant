@@ -338,15 +338,27 @@ def get_online_players() -> List[str]:
 def fuzzy_match_player(target_name: str) -> Optional[str]:
     """
     Busca al jugador más similar en la lista de conectados.
-    Requiere al menos 80% de similitud para considerarse válido.
+    Es insensible a mayúsculas y verifica subcadenas antes de usar difflib.
     """
     online_players = get_online_players()
     if not online_players:
         return None
         
-    matches = difflib.get_close_matches(target_name, online_players, n=1, cutoff=0.8)
+    target_lower = target_name.lower().strip()
+    
+    # 1. Búsqueda exacta (ignorando mayúsculas) o subcadena directa
+    for p in online_players:
+        p_lower = p.lower()
+        if target_lower == p_lower or target_lower in p_lower:
+            return p
+            
+    # 2. Búsqueda difusa (fuzzy) por si hubo un error de tipeo
+    online_players_lower = {p.lower(): p for p in online_players}
+    matches = difflib.get_close_matches(target_lower, list(online_players_lower.keys()), n=1, cutoff=0.6)
+    
     if matches:
-        return matches[0]
+        return online_players_lower[matches[0]]
+        
     return None
 
 # Expresiones regulares
@@ -423,10 +435,18 @@ BEDROCK_BIOME_MAPPING = {
     # End
     # "the_end" → idénticos
     # Nuevos biomas 1.18+ (idénticos en Bedrock y Java)
-    # "meadow", "grove", "snowy_slopes", "frozen_peaks", "jagged_peaks", "stony_peaks",
-    # "cherry_grove", "dripstone_caves", "lush_caves", "deep_dark" → idénticos
-    # Mangrove Swamp → "mangrove_swamp" idéntico en Bedrock
-    # Pale Garden → "pale_garden" idéntico en Bedrock
+    "meadow": "meadow",
+    "grove": "grove",
+    "snowy_slopes": "snowy_slopes",
+    "frozen_peaks": "frozen_peaks",
+    "jagged_peaks": "jagged_peaks",
+    "stony_peaks": "stony_peaks",
+    "cherry_grove": "cherry_grove",
+    "dripstone_caves": "dripstone_caves",
+    "lush_caves": "lush_caves",
+    "deep_dark": "deep_dark",
+    "mangrove_swamp": "mangrove_swamp",
+    "pale_garden": "pale_garden"
 }
 
 # ─── Sistema de Validación de Tamaño de Biomas ──────────────────
@@ -537,11 +557,11 @@ INSULTS = [
 
 # Sistema categorizado de probabilidades de ítems
 ITEM_CATEGORIES = [
-    ("divine", 0.005, ["netherite", "elytra", "totem", "beacon", "shulker", "star", "dragon", "enchanted_golden_apple"]),
-    ("rare", 0.05, ["diamond", "emerald", "gold", "pearl", "tnt", "obsidian", "crystal", "sword", "golden_apple"]),
-    ("uncommon", 0.25, ["iron", "chainmail", "redstone", "lapis", "copper", "shears", "shield", "bow", "arrow"]),
+    ("divine", 0.005, ["netherite", "elytra", "totem", "beacon", "shulker", "star", "dragon", "enchanted_golden_apple", "trident", "mace", "heavy_core", "sponge", "heart_of_the_sea", "echo_shard"]),
+    ("rare", 0.05, ["diamond", "emerald", "gold", "pearl", "tnt", "obsidian", "crystal", "golden_apple", "enchanting", "anvil", "brewing", "conduit", "nautilus", "disc", "saddle", "template", "trim", "debris", "crying_obsidian", "anchor", "bell", "name_tag", "horse_armor", "blaze", "ghast", "phantom", "ender_chest", "wither_skull", "enchanted_book"]),
+    ("uncommon", 0.25, ["iron", "chainmail", "redstone", "lapis", "copper", "shears", "shield", "bow", "arrow", "sword", "quartz", "glowstone", "amethyst", "book", "clock", "compass", "spyglass", "bucket", "minecart", "boat", "hopper", "dispenser", "observer", "piston", "slime", "honey", "lead", "crossbow"]),
     ("potion", 0.15, ["potion"]),
-    ("common", 0.60, [])  # Fallback
+    ("common", 0.30, [])  # Fallback
 ]
 
 # Mapeo de ítems con Data Values (para pociones en Bedrock)
@@ -731,9 +751,9 @@ def process_item_request(player: str, item: str, amount: int = 1) -> None:
     devocion_data = get_player_devocion_data(player)
     puntos = devocion_data["puntos"]
 
-    # 2. Calcular probabilidades basadas en devoción (de 1x a 5x multiplicador)
+    # 2. Calcular probabilidades basadas en devoción (de 1x a 3x multiplicador)
     base_prob = get_item_probability(item)
-    mult = 1.0 + 4.0 * min(1.0, puntos / 500.0)
+    mult = 1.0 + 2.0 * min(1.0, puntos / 500.0)
     
     if amount <= 10:
         divisor = math.sqrt(amount)
@@ -953,10 +973,11 @@ def process_command(player: str, structure: str) -> None:
     # Generar respuesta
     mystical_message = ai_handler.generate_response(
         player_name=player,
-        structure=structure,
+        target_name=structure,
         distance=distance,
         direction=direction,
-        devocion_rango=nueva_data["rango"]
+        devocion_rango=nueva_data["rango"],
+        target_type="structure"
     )
 
     final_message = f"§6[§5Oráculo§6] §d{mystical_message}"
@@ -1605,6 +1626,46 @@ def process_teleport_request(player: str, destination: str) -> None:
     is_admin = player in ADMIN_PLAYERS
     puntos = devocion_data["puntos"]
     
+    # Extraer coordenadas o jugador destino
+    coords = re.findall(r"(-?\d+)", destination)
+    tp_command = None
+    target_found = True
+    
+    if len(coords) >= 3:
+        # 3 Coordenadas X Y Z
+        x, y, z = coords[0], coords[1], coords[2]
+        tp_command = f"execute as \"{player}\" run tp @s {x} {y} {z}"
+    elif len(coords) == 2:
+        # 2 Coordenadas X Z (usamos spreadplayers para asegurar que no queden atrapados)
+        x, z = coords[0], coords[1]
+        tp_command = f"execute as \"{player}\" run spreadplayers {x} {z} 0.0 1.0 @s"
+    else:
+        # Buscar jugador
+        victim = fuzzy_match_player(destination)
+        if victim:
+            if victim.lower() == player.lower():
+                # Evitar TP a sí mismo
+                try:
+                    rcon_client.send_tellraw(player, "§6[§5Oráculo§6] §cNo puedes viajar hacia ti mismo, mortal.")
+                except Exception:
+                    pass
+                return
+            tp_command = f"execute as \"{player}\" run tp @s \"{victim}\""
+        else:
+            # Destino inválido o no reconocido
+            target_found = False
+
+    if not target_found:
+        # Si no reconoció coordenadas ni jugador, fallamos la petición directamente
+        update_player_devocion(player, -5)
+        increase_wrath(1)
+        try:
+            rcon_client.execute_command(f"execute at \"{player}\" run playsound random.glass @s")
+            rcon_client.send_tellraw(player, "§6[§5Oráculo§6] §cEse destino es incierto o inexistente. Formula mejor tu plegaria.")
+        except Exception:
+            pass
+        return
+
     if is_admin:
         prob_success = 0.95
     else:
@@ -1615,12 +1676,15 @@ def process_teleport_request(player: str, destination: str) -> None:
     if roll <= prob_success:
         outcome = "success"
         try:
-            rcon_client.execute_command(f"execute as \"{player}\" in overworld run tp @s 0 100 0") # Envía al spawn world
+            rcon_client.execute_command(tp_command)
+            # Protección divina para evitar daño de caída si spreadplayers los deja en Y=320
+            rcon_client.execute_command(f"effect \"{player}\" resistance 25 255 true")
+            rcon_client.execute_command(f"effect \"{player}\" water_breathing 25 1 true")
             rcon_client.execute_command(f"execute at \"{player}\" run playsound mob.endermen.portal @a")
-            logger.info(f"Teletransporte exitoso para '{player}'.")
+            logger.info(f"Teletransporte exitoso para '{player}' con comando: {tp_command}.")
         except Exception as e:
             logger.error(f"Error al teletransportar a {player}: {e}")
-        update_player_devocion(player, -10) # Cobrar peaje de devoción
+        update_player_devocion(player, -30) # Cobrar peaje de devoción (balanceado a -30)
     else:
         # Troleo
         trolls = ["troll_sky", "troll_spawn"]
