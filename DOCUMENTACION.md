@@ -32,7 +32,7 @@ Bienvenido a las sagradas y absolutas escrituras. Este documento no es una simpl
 
 ## 1. La "Personalidad" del Oráculo
 
-El Oráculo no es tu amigo. Está diseñado mediante un prompt de sistema dictatorial en Gemini (`ai_handler.py`). Su tono, por mandato celestial, es el siguiente:
+El Oráculo no es tu amigo. Está diseñado mediante un prompt de sistema dictatorial en OpenAI (`ai_handler.py`). Su tono, por mandato celestial, es el siguiente:
 
 * **Místico y Enigmático:** Básicamente, habla en metáforas insoportables para nunca dar respuestas directas. Si la plebe no entiende, es su problema.
 * **Neutral-Caótico:** La compasión es un bug, no una feature. Juzga a los jugadores basándose estrictamente en una hoja de cálculo sobreglorificada llamada "devoción".
@@ -44,7 +44,7 @@ El Oráculo no es tu amigo. Está diseñado mediante un prompt de sistema dictat
 
 ## 2. El Sistema de Devoción (Control de Masas)
 
-El archivo `devocion.json` es el "registro akáshico" de tu servidor, o en términos técnicos: la base de datos donde cuantificamos cuánto valen estas almas virtuales. Todos los mortales nuevos inician con mediocres 50 puntos (rango "Dudoso") para que el Oráculo ni los escupa ni los alabe al principio.
+El archivo `devocion.db` (SQLite) es el "registro akáshico" de tu servidor, o en términos técnicos: la base de datos donde cuantificamos cuánto valen estas almas virtuales. Todos los mortales nuevos inician con mediocres 50 puntos (rango "Dudoso") para que el Oráculo ni los escupa ni los alabe al principio. Si existe un `devocion.json` legado, se migra automáticamente al primer arranque.
 
 * **Valores Positivos:** El jugador es un lamebotas bendecido. Sus sacrificios requieren menos valor económico y los castigos son palmadas en la espalda.
 * **Valores Negativos ("Hereje"):** Escoria. El Oráculo los tratará con el desprecio que merecen, ignorándolos o friéndolos con rayos por respirar.
@@ -117,7 +117,7 @@ Si te aburres del orden establecido, aquí hay algunas ideas para programar "Eas
 
 ## 5. Guía para Añadir Nuevos Secretos
 
-Para añadir más caprichos dictatoriales, intercepta el mensaje del jugador en el código ANTES de mandarlo a Gemini. Así te ahorras la factura de la API y el castigo es instantáneo.
+Para añadir más caprichos dictatoriales, intercepta el mensaje del jugador en el código ANTES de mandarlo a OpenAI. Así te ahorras la factura de la API y el castigo es instantáneo.
 
 ```python
 # ==========================================

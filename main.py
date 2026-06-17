@@ -5,6 +5,7 @@ import math
 import time
 import random
 import json
+import sqlite3
 import logging
 import queue
 import threading
@@ -122,28 +123,142 @@ rcon_client = RCONClient(
 ai_handler = AIHandler(api_key=OPENAI_API_KEY, model=OPENAI_MODEL)
 
 # ---- SISTEMA DE DEVOCIÓN DINÁMICA ----
-DEVOCION_FILE = "devocion.json"
+DEVOCION_DB_FILE = "devocion.db"
+DEVOCION_LEGACY_FILE = "devocion.json"
 
-def load_devocion() -> dict:
-    if not os.path.exists(DEVOCION_FILE):
-        db = {}
-        for player in DIVINE_FAVOR_PLAYERS:
-            db[player] = {"puntos": 500, "rango": "Predilecto", "ultima_ofrenda": 0.0}
-        save_devocion(db)
-        return db
+def _get_devocion_connection() -> sqlite3.Connection:
+    """Crea una conexión SQLite de corta vida para uso local por operación."""
+    return sqlite3.connect(DEVOCION_DB_FILE, timeout=10)
+
+def _migrate_legacy_devocion_if_needed(conn: sqlite3.Connection) -> None:
+    """Migra una sola vez los datos de devocion.json a SQLite si la tabla está vacía."""
+    if not os.path.exists(DEVOCION_LEGACY_FILE):
+        return
+
     try:
-        with open(DEVOCION_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+        count = conn.execute("SELECT COUNT(*) FROM devotion").fetchone()[0]
+    except sqlite3.OperationalError as e:
+        logger.error(f"No se pudo verificar el estado de la tabla devotion: {e}")
+        return
+    if count > 0:
+        return
+
+    try:
+        with open(DEVOCION_LEGACY_FILE, "r", encoding="utf-8") as f:
+            legacy_db = json.load(f)
     except Exception as e:
-        logger.error(f"Error al cargar devocion.json: {e}")
+        logger.error(f"Error al leer {DEVOCION_LEGACY_FILE} para migración: {e}")
+        return
+
+    if not isinstance(legacy_db, dict):
+        logger.warning(f"{DEVOCION_LEGACY_FILE} no tiene formato válido de objeto raíz. Se omite migración.")
+        return
+
+    migrated = 0
+    for player, data in legacy_db.items():
+        if not isinstance(data, dict):
+            continue
+        player_key = str(player)
+        default_points = 500 if player_key in DIVINE_FAVOR_PLAYERS else 50
+        default_rank = "Predilecto" if player_key in DIVINE_FAVOR_PLAYERS else "Dudoso"
+        try:
+            puntos = int(data.get("puntos", default_points))
+        except (TypeError, ValueError):
+            puntos = default_points
+        rango = str(data.get("rango", default_rank))
+        try:
+            ultima_ofrenda = float(data.get("ultima_ofrenda", 0.0))
+        except (TypeError, ValueError):
+            ultima_ofrenda = 0.0
+
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO devotion (player, puntos, rango, ultima_ofrenda)
+            VALUES (?, ?, ?, ?)
+            """,
+            (player_key, puntos, rango, ultima_ofrenda),
+        )
+        migrated += 1
+
+    if migrated > 0:
+        logger.info(f"Migración completada: {migrated} jugadores movidos de {DEVOCION_LEGACY_FILE} a {DEVOCION_DB_FILE}.")
+
+def _ensure_devocion_storage() -> None:
+    """Inicializa SQLite de devoción, ejecuta migración legacy y garantiza jugadores con favor divino."""
+    try:
+        with _get_devocion_connection() as conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS devotion (
+                    player TEXT PRIMARY KEY,
+                    puntos INTEGER NOT NULL,
+                    rango TEXT NOT NULL,
+                    ultima_ofrenda REAL NOT NULL DEFAULT 0.0
+                )
+                """
+            )
+            _migrate_legacy_devocion_if_needed(conn)
+
+            for player in DIVINE_FAVOR_PLAYERS:
+                conn.execute(
+                    """
+                    INSERT INTO devotion (player, puntos, rango, ultima_ofrenda)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(player) DO NOTHING
+                    """,
+                    (player, 500, "Predilecto", 0.0),
+                )
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error al inicializar almacenamiento de devoción SQLite: {e}")
+
+def load_devocion() -> Dict[str, dict]:
+    _ensure_devocion_storage()
+    try:
+        with _get_devocion_connection() as conn:
+            rows = conn.execute(
+                "SELECT player, puntos, rango, ultima_ofrenda FROM devotion"
+            ).fetchall()
+            db: Dict[str, dict] = {}
+            for player, puntos, rango, ultima_ofrenda in rows:
+                db[str(player)] = {
+                    "puntos": int(puntos),
+                    "rango": str(rango),
+                    "ultima_ofrenda": float(ultima_ofrenda),
+                }
+            return db
+    except Exception as e:
+        logger.error(f"Error al cargar {DEVOCION_DB_FILE}: {e}")
         return {}
 
 def save_devocion(db: dict) -> None:
+    _ensure_devocion_storage()
     try:
-        with open(DEVOCION_FILE, "w", encoding="utf-8") as f:
-            json.dump(db, f, indent=2, ensure_ascii=False)
+        with _get_devocion_connection() as conn:
+            for player, data in db.items():
+                if not isinstance(data, dict):
+                    continue
+                player_key = str(player)
+                try:
+                    puntos = int(data.get("puntos", 50))
+                except (TypeError, ValueError):
+                    puntos = 50
+                rango = str(data.get("rango", "Dudoso"))
+                try:
+                    ultima_ofrenda = float(data.get("ultima_ofrenda", 0.0))
+                except (TypeError, ValueError):
+                    ultima_ofrenda = 0.0
+
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO devotion (player, puntos, rango, ultima_ofrenda)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (player_key, puntos, rango, ultima_ofrenda),
+                )
+            conn.commit()
     except Exception as e:
-        logger.error(f"Error al guardar devocion.json: {e}")
+        logger.error(f"Error al guardar {DEVOCION_DB_FILE}: {e}")
 
 DEVOTION_RANKS = [
     (1000, "Predilecto"),
