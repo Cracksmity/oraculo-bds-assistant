@@ -557,9 +557,9 @@ INSULTS = [
 
 # Sistema categorizado de probabilidades de ítems
 ITEM_CATEGORIES = [
-    ("divine", 0.005, ["netherite", "elytra", "totem", "beacon", "shulker", "star", "dragon", "enchanted_golden_apple", "trident", "mace", "heavy_core", "sponge", "heart_of_the_sea", "echo_shard"]),
+    ("divine", 0.005, ["netherite", "elytra", "totem", "beacon", "shulker", "star", "dragon", "enchanted_golden_apple", "trident", "mace", "heavy_core", "sponge", "heart_of_the_sea", "echo_shard", "end_portal"]),
     ("rare", 0.05, ["diamond", "emerald", "gold", "pearl", "tnt", "obsidian", "crystal", "golden_apple", "enchanting", "anvil", "brewing", "conduit", "nautilus", "disc", "saddle", "template", "trim", "debris", "crying_obsidian", "anchor", "bell", "name_tag", "horse_armor", "blaze", "ghast", "phantom", "ender_chest", "wither_skull", "enchanted_book"]),
-    ("uncommon", 0.25, ["iron", "chainmail", "redstone", "lapis", "copper", "shears", "shield", "bow", "arrow", "sword", "quartz", "glowstone", "amethyst", "book", "clock", "compass", "spyglass", "bucket", "minecart", "boat", "hopper", "dispenser", "observer", "piston", "slime", "honey", "lead", "crossbow"]),
+    ("uncommon", 0.25, ["iron", "chainmail", "redstone", "lapis", "copper", "shears", "shield", "bow", "arrow", "sword", "quartz", "glowstone", "amethyst", "book", "clock", "compass", "spyglass", "bucket", "minecart", "boat", "hopper", "dispenser", "observer", "piston", "slime", "honey", "lead", "crossbow", "end_stone", "purpur", "end_rod", "chorus", "nether_wart", "soul_sand", "soul_soil", "magma", "netherrack", "nether_brick", "basalt", "blackstone", "crimson", "warped", "shroomlight"]),
     ("potion", 0.15, ["potion"]),
     ("common", 0.30, [])  # Fallback
 ]

@@ -12,6 +12,21 @@ Bienvenido a las sagradas y absolutas escrituras. Este documento no es una simpl
 4. [Huevos de Pascua (Caprichos de Programador)](#4-huevos-de-pascua-caprichos-de-programador)
 5. [Guía para Añadir Nuevos Secretos](#5-guía-para-añadir-nuevos-secretos)
 6. [Apéndice Secreto: La Mecánica del "Favor Divino"](#🤫-apéndice-secreto-la-mecánica-del-favor-divino)
+7. [Problemas Conocidos (Rotura en BDS 1.26.30)](#⚠️-problemas-conocidos-rotura-en-bds-12630)
+
+---
+
+## ⚠️ Problemas Conocidos (Rotura en BDS 1.26.30)
+
+> [!WARNING]
+> **Incompatibilidad con Minecraft BDS 1.26.30**
+> La actualización 1.26.30 introdujo cambios drásticos que eliminan o modifican sustancialmente las APIs Beta experimentales. Específicamente, el módulo `@minecraft/server-net` (utilizado por el `oraculo_bridge` para enviar peticiones HTTP al bot de Python) ha dejado de funcionar correctamente.
+> 
+> **Impacto:** El Oráculo ya no puede recibir eventos del chat ni de items soltados en el mundo. El sistema está **roto** en esta versión.
+> 
+> **Solución temporal:** Mantener el servidor en una versión estable anterior (como 1.21.x) hasta que Mojang estabilice las APIs y se lance un parche para este addon.
+> 
+> **Seguimiento del Bug:** Puedes seguir el reporte oficial en el portal de soporte de Mojang aquí: [BDS-23063](https://report.bugs.mojang.com/servicedesk/customer/portal/4/BDS-23063)
 
 ---
 

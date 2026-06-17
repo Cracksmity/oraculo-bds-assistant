@@ -1,5 +1,9 @@
 # 👁️ Oráculo BDS Assistant
 
+> [!WARNING]
+> **Incompatibilidad Crítica en BDS 1.26.30:** La actualización de Minecraft Bedrock Dedicated Server a la versión 1.26.30 ha roto temporalmente el funcionamiento de este addon. Los cambios en las APIs Beta experimentales (especialmente `@minecraft/server-net`) impiden la comunicación con el bot de Python. Por favor, **mantén tu servidor en una versión estable anterior (como 1.21.x)** hasta que haya una solución.
+> Puedes consultar el seguimiento del problema oficial aquí: [Reporte de bug BDS-23063](https://report.bugs.mojang.com/servicedesk/customer/portal/4/BDS-23063).
+
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
 ![Minecraft](https://img.shields.io/badge/Minecraft%20Bedrock-Dedicated%20Server-green)
 ![Gemini Pro](https://img.shields.io/badge/AI-Google%20Gemini%20Pro-orange)
