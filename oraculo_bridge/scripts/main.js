@@ -54,7 +54,8 @@ function sendToBot(endpoint, data) {
 // ─── Comando /oraculo (API estable) ────────────────────────────
 // Los parámetros String de Bedrock solo capturan una palabra, así que
 // se registran varios opcionales (máx. 8, límite del BDS) y se unen.
-// Para mensajes más largos se usan comillas:
+// Los números sueltos tampoco son String válidos ("dame 3 manzanas" da error de
+// sintaxis): van entre comillas o en letra. Para mensajes largos, comillas:
 //   /oraculo dame 5 diamantes
 //   /oraculo "¿dónde hay un bosque de cerezos?"
 const MAX_COMMAND_WORDS = 8; // límite de parámetros por comando en BDS
@@ -71,7 +72,7 @@ system.beforeEvents.startup.subscribe(({ customCommandRegistry }) => {
   customCommandRegistry.registerCommand(
     {
       name: "oraculo:oraculo",
-      description: "Habla con el Oráculo",
+      description: "Habla con el Oráculo. Con números usa comillas o escríbelos en letra",
       permissionLevel: CommandPermissionLevel.Any,
       cheatsRequired: false,
       optionalParameters,

@@ -94,7 +94,7 @@ El sistema opera en dos frentes que se comunican en tiempo real:
     /oraculo dame un acertijo
     /oraculo "¿dónde hay un bosque de cerezos?"
     ```
-    Sin comillas se aceptan hasta 8 palabras (límite de parámetros del BDS); para mensajes más largos, o si el juego marca error de sintaxis, ponlo entre comillas. Si otro addon ya usa `/oraculo`, escribe `/oraculo:oraculo`.
+    Sin comillas se aceptan hasta 8 palabras (límite de parámetros del BDS) y **sin números sueltos**: Minecraft rechaza `/oraculo dame 3 manzanas` con un error de sintaxis antes de que llegue al Oráculo. Escribe `/oraculo dame tres manzanas` o `/oraculo "dame 3 manzanas"`. Para mensajes más largos, o si el juego marca cualquier error de sintaxis, usa comillas. Si otro addon ya usa `/oraculo`, escribe `/oraculo:oraculo`.
 
 ---
 
