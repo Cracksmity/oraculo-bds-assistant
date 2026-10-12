@@ -14,8 +14,7 @@ from typing import Optional, Dict, List
 from dotenv import load_dotenv
 
 from rcon_client import RCONClient
-from log_monitor import LogMonitor
-from webhook_server import WebhookServer
+from console_bridge import ConsoleBridge
 from ai_handler import AIHandler
 
 # Configurar el sistema de logs
@@ -36,12 +35,13 @@ load_dotenv()
 SCREEN_SESSION_NAME = os.getenv("SCREEN_SESSION_NAME", "minecraft")
 SERVER_LOG_FILE = os.getenv("SERVER_LOG_FILE", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-LOG_FILE_PATH = os.getenv("LOG_FILE_PATH")
 COMMAND_KEYWORD = os.getenv("COMMAND_KEYWORD", "!oraculo")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 RESPONSE_TARGET_TEMPLATE = os.getenv("RESPONSE_TARGET", "@a")
 
-# Configuración del Webhook Server (puente con Behavior Pack)
+# Webhook HTTP heredado: solo sirve si el Behavior Pack usa @minecraft/server-net (Beta APIs).
+# Por defecto el puente con el Behavior Pack es la consola del BDS (SERVER_LOG_FILE).
+ENABLE_WEBHOOK = os.getenv("ENABLE_WEBHOOK", "False").strip().lower() in ("true", "1", "yes")
 WEBHOOK_PORT_STR = os.getenv("WEBHOOK_PORT", "5050")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 
@@ -77,8 +77,6 @@ if not OPENAI_API_KEY:
 if not SERVER_LOG_FILE:
     logger.critical("Falta la variable SERVER_LOG_FILE en el archivo .env. Saliendo...")
     sys.exit(1)
-if not LOG_FILE_PATH:
-    logger.warning("LOG_FILE_PATH no configurado. El monitor de logs estará desactivado (solo se usará el webhook).")
 
 try:
     COOLDOWN_SECONDS = int(COOLDOWN_SECONDS_STR)
@@ -2157,28 +2155,43 @@ def process_server_event(event_type: str, player: str) -> None:
 
 
 def main() -> None:
-    """Función de entrada principal. Inicia el servidor webhook que recibe datos del Behavior Pack."""
+    """Función de entrada principal. Escucha al Behavior Pack a través de la consola del BDS."""
     logger.info("==============================================")
     logger.info("Iniciando Bot Oráculo para Minecraft Bedrock")
     logger.info(f"Modo Revelar Coordenadas Exactas: {REVEAL_EXACT_COORDS}")
     logger.info(f"Cooldown general: {COOLDOWN_SECONDS}s")
     logger.info(f"Jugadores con Favor Divino: {DIVINE_FAVOR_PLAYERS}")
-    logger.info(f"Webhook escuchando en puerto: {WEBHOOK_PORT}")
+    logger.info(f"Puente de consola leyendo: {SERVER_LOG_FILE}")
+    if ENABLE_WEBHOOK:
+        logger.info(f"Webhook heredado escuchando en puerto: {WEBHOOK_PORT}")
     logger.info("==============================================")
 
-    webhook = WebhookServer(
-        port=WEBHOOK_PORT,
+    if ENABLE_WEBHOOK:
+        from webhook_server import WebhookServer  # requiere Flask
+
+        webhook = WebhookServer(
+            port=WEBHOOK_PORT,
+            chat_callback=process_chat_message,
+            event_callback=process_server_event,
+            biome_result_callback=biome_result_queue.put,
+            secret=WEBHOOK_SECRET if WEBHOOK_SECRET else None,
+        )
+        threading.Thread(target=webhook.start, name="webhook", daemon=True).start()
+
+    bridge = ConsoleBridge(
+        log_file=SERVER_LOG_FILE,
         chat_callback=process_chat_message,
         event_callback=process_server_event,
         biome_result_callback=biome_result_queue.put,
-        secret=WEBHOOK_SECRET if WEBHOOK_SECRET else None,
+        devotion_callback=update_player_devocion,
     )
 
     try:
-        webhook.start()
+        bridge.start()
     except KeyboardInterrupt:
         logger.info("Deteniendo el oráculo por KeyboardInterrupt...")
     finally:
+        bridge.stop()
         rcon_client.disconnect()
         logger.info("Bot Oráculo apagado completamente.")
 

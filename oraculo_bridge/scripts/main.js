@@ -1,63 +1,113 @@
 /**
  * Oráculo Bridge — Behavior Pack Script
- * 
- * Captura los mensajes del chat y eventos de jugadores dentro del
- * Bedrock Dedicated Server usando la Scripting API oficial, y los
- * reenvía al bot Oráculo (Python/Flask) mediante HTTP POST.
- * 
+ *
+ * Captura los comandos del Oráculo y eventos de jugadores dentro del
+ * Bedrock Dedicated Server usando SOLO la Scripting API estable, y los
+ * reenvía al bot Oráculo (Python) escribiéndolos en la consola del BDS.
+ *
+ * ¿Por qué no HTTP? @minecraft/server-net solo existe como API beta, y
+ * desde BDS 1.26.30 los mundos con el experimento "Beta APIs" activo
+ * impiden que los jugadores se conecten ("Unable to join external
+ * servers", ver BDS-23063 / MCPE-239705). Este pack no requiere
+ * ningún experimento.
+ *
+ * Protocolo (script → Python): cada mensaje es una línea de consola
+ *   ORACULO_IPC::{"endpoint":"/chat","data":{...}}
+ * que el bot lee haciendo tail del server.log. El JSON se escapa a
+ * ASCII para que acentos/emoji no dependan de la codificación del log.
+ *
  * Dependencias:
- *   - @minecraft/server (afterEvents.chatSend, playerJoin, playerLeave)
- *   - @minecraft/server-net (http.request para POST al webhook)
+ *   - @minecraft/server 2.3.0 (estable: comandos personalizados, getBiome)
  */
 
-import { world, system, BlockComponentTypes } from "@minecraft/server";
 import {
-  http,
-  HttpRequest,
-  HttpRequestMethod,
-  HttpHeader,
-} from "@minecraft/server-net";
+  world,
+  system,
+  BlockComponentTypes,
+  CommandPermissionLevel,
+  CustomCommandParamType,
+  CustomCommandStatus,
+} from "@minecraft/server";
 
 // ─── Configuración ─────────────────────────────────────────────
-// URL base del bot Oráculo (Python Flask corriendo en la misma VPS)
-const WEBHOOK_BASE_URL = "http://localhost:5050";
-
-// Prefijo del comando que activa al Oráculo
+// Prefijo que espera el bot Python (COMMAND_KEYWORD en el .env)
 const COMMAND_PREFIX = "!oraculo";
+
+// Marcador que el bot Python busca en el server.log
+const IPC_MARKER = "ORACULO_IPC::";
 
 // ─── Utilidades ────────────────────────────────────────────────
 
 /**
- * Envía un payload JSON al bot Oráculo via HTTP POST.
- * @param {string} endpoint - Ruta del endpoint (ej. "/chat" o "/event")
- * @param {object} data - Objeto a serializar como JSON en el body
+ * Envía un payload JSON al bot Oráculo a través de la consola del BDS.
+ * @param {string} endpoint - Ruta lógica (ej. "/chat" o "/event")
+ * @param {object} data - Objeto a serializar como JSON
  */
 function sendToBot(endpoint, data) {
-  const req = new HttpRequest(`${WEBHOOK_BASE_URL}${endpoint}`);
-  req.method = HttpRequestMethod.Post;
-  req.headers = [new HttpHeader("Content-Type", "application/json")];
-  req.body = JSON.stringify(data);
-
-  http
-    .request(req)
-    .then((response) => {
-      if (response.status !== 200) {
-        console.warn(
-          `[Oráculo Bridge] Respuesta inesperada del bot (HTTP ${response.status}) en ${endpoint}`
-        );
-      }
-    })
-    .catch((err) => {
-      console.warn(
-        `[Oráculo Bridge] Error de conexión al enviar a ${endpoint}: ${err}`
-      );
-    });
+  const json = JSON.stringify({ endpoint, data }).replace(
+    /[\u007f-￿]/g,
+    (c) => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0")
+  );
+  console.warn(`${IPC_MARKER}${json}`);
 }
 
-// ─── Captura de Mensajes del Chat ──────────────────────────────
-// chatSend es una API experimental/pre-release. Requiere que la
-// dependencia apunte a una versión beta de @minecraft/server Y
-// que el servidor tenga habilitadas las Beta APIs.
+// ─── Comando /oraculo (API estable) ────────────────────────────
+// Los parámetros String de Bedrock solo capturan una palabra, así que
+// se registran varios opcionales (máx. 8, límite del BDS) y se unen.
+// Los números sueltos tampoco son String válidos ("dame 3 manzanas" da error de
+// sintaxis): van entre comillas o en letra. Para mensajes largos, comillas:
+//   /oraculo dame 5 diamantes
+//   /oraculo "¿dónde hay un bosque de cerezos?"
+const MAX_COMMAND_WORDS = 8; // límite de parámetros por comando en BDS
+
+system.beforeEvents.startup.subscribe(({ customCommandRegistry }) => {
+  const optionalParameters = [];
+  for (let i = 1; i <= MAX_COMMAND_WORDS; i++) {
+    optionalParameters.push({
+      name: i === 1 ? "mensaje" : `mensaje${i}`,
+      type: CustomCommandParamType.String,
+    });
+  }
+
+  customCommandRegistry.registerCommand(
+    {
+      name: "oraculo:oraculo",
+      description: "Invoca al Oráculo. Las cifras mortales no llegan a sus oídos: escríbelas en letra o encierra tu súplica entre comillas",
+      permissionLevel: CommandPermissionLevel.Any,
+      cheatsRequired: false,
+      optionalParameters,
+    },
+    (origin, ...words) => {
+      const player = origin.sourceEntity;
+      if (!player || player.typeId !== "minecraft:player") {
+        return {
+          status: CustomCommandStatus.Failure,
+          message: "Solo un jugador puede invocar al Oráculo.",
+        };
+      }
+
+      const text = words.filter((w) => w !== undefined).join(" ").trim();
+      const message = text ? `${COMMAND_PREFIX} ${text}` : COMMAND_PREFIX;
+      const playerName = player.name;
+
+      // El callback corre en modo restringido; diferimos los efectos
+      system.run(() => {
+        sendToBot("/chat", {
+          player: playerName,
+          message,
+          timestamp: Date.now(),
+        });
+      });
+
+      return { status: CustomCommandStatus.Success };
+    }
+  );
+});
+
+// ─── Captura de Mensajes del Chat (solo con Beta APIs) ─────────
+// chatSend sigue siendo beta. Con la dependencia estable no existe y
+// los jugadores usan /oraculo; si algún día se vuelve estable, el
+// prefijo !oraculo en el chat volverá a funcionar automáticamente.
 
 if (world.afterEvents.chatSend) {
   world.afterEvents.chatSend.subscribe((eventData) => {
@@ -66,10 +116,6 @@ if (world.afterEvents.chatSend) {
 
     // Solo reenviar mensajes que comienzan con el prefijo del Oráculo
     if (message.toLowerCase().startsWith(COMMAND_PREFIX)) {
-      console.warn(
-        `[Oráculo Bridge] Comando detectado de '${playerName}': ${message}`
-      );
-
       sendToBot("/chat", {
         player: playerName,
         message: message,
@@ -77,12 +123,6 @@ if (world.afterEvents.chatSend) {
       });
     }
   });
-} else {
-  console.warn(
-    "[Oráculo Bridge] ⚠ world.afterEvents.chatSend no está disponible. " +
-    "Asegúrate de que @minecraft/server apunte a una versión beta (ej. 2.10.0-beta) " +
-    "y que las Beta APIs estén habilitadas en server.properties."
-  );
 }
 
 // ─── Captura de Conexiones de Jugadores ────────────────────────
@@ -120,8 +160,9 @@ world.afterEvents.playerLeave.subscribe((eventData) => {
 system.runTimeout(() => {
   const chatApiReady = !!world.afterEvents.chatSend;
   console.warn(
-    `[Oráculo Bridge] ✓ Behavior Pack cargado (v1.0.2). ` +
-    `Chat API: ${chatApiReady ? "✓ activa" : "✗ no disponible"}. ` +
+    `[Oráculo Bridge] ✓ Behavior Pack cargado (v1.1.0). ` +
+    `Comando /oraculo: ✓ activo. ` +
+    `Chat !oraculo: ${chatApiReady ? "✓ activo" : "✗ (requiere Beta APIs)"}. ` +
     `Biome Check: ✓ activo. ` +
     `Escuchando eventos de jugadores...`
   );
