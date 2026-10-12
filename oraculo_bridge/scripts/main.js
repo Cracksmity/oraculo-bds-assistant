@@ -72,7 +72,7 @@ system.beforeEvents.startup.subscribe(({ customCommandRegistry }) => {
   customCommandRegistry.registerCommand(
     {
       name: "oraculo:oraculo",
-      description: "Habla con el Oráculo. Con números usa comillas o escríbelos en letra",
+      description: "Invoca al Oráculo. Las cifras mortales no llegan a sus oídos: escríbelas en letra o encierra tu súplica entre comillas",
       permissionLevel: CommandPermissionLevel.Any,
       cheatsRequired: false,
       optionalParameters,
