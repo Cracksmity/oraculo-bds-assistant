@@ -1,11 +1,13 @@
 # 👁️ Oráculo BDS Assistant
 
-> [!IMPORTANT]
-> **Compatible con BDS 1.26.30+ desde la v1.1.0.** La versión anterior dependía de `@minecraft/server-net`, que solo existe como API Beta. Desde BDS 1.26.30, los mundos con experimentos activos (Beta APIs) dejan a los jugadores atascados en *"Connecting to the server"* / *"Unable to join external servers"* ([BDS-23063](https://mojira.dev/BDS-23063), [MCPE-239705](https://mojira.dev/MCPE-239705)). El puente ahora usa **solo APIs estables** y se comunica con Python a través de la consola del servidor, así que el mundo **ya no necesita ningún experimento**. Ver [Migración desde la v1.0.x](#-migración-desde-la-v10x).
+> [!TIP]
+> **✅ Funcionando de nuevo (v1.1.0), probado en BDS 1.26.52 en octubre de 2026.**
+> La actualización 1.26.30 de Bedrock dejó el proyecto inservible: el puente dependía de `@minecraft/server-net`, una API que solo existe como Beta, y los mundos con experimentos activos dejaron de aceptar jugadores (*"Unable to join external servers"*, ver [BDS-23063](https://mojira.dev/BDS-23063) y [MCPE-239705](https://mojira.dev/MCPE-239705)). Desde la v1.1.0 el puente usa **solo APIs estables** y el mundo **ya no necesita ningún experimento**. Si venías de la v1.0.x, mira la [guía de migración](#-migración-desde-la-v10x).
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
 ![Minecraft](https://img.shields.io/badge/Minecraft%20Bedrock-Dedicated%20Server-green)
 ![OpenAI](https://img.shields.io/badge/AI-OpenAI-orange)
+![BDS](https://img.shields.io/badge/BDS-1.26.52%20probado-brightgreen)
 
 **Oráculo BDS Assistant** es un sistema de asistencia avanzado y misterioso impulsado por inteligencia artificial para servidores de Minecraft Bedrock (BDS). Diseñado con una arquitectura híbrida (Consola del BDS + OpenAI), este bot introduce una deidad interactiva en tu mundo: **El Oráculo**.
 
@@ -22,7 +24,24 @@ El Oráculo es capaz de entender lenguaje natural, juzgar las acciones de los ju
 *   **⚖️ Castigo a la Avaricia y el Spam:** Pide ítems en cantidades específicas, pero cuidado: pedir más de un stack (avaricia) o insistir durante los tiempos de espera (spam) desatará advertencias y rayos mortales progresivos.
 *   **🧩 Acertijos Mortales:** El Oráculo puede retar a los atrevidos. Respuestas correctas traen bendiciones (ítems raros, cielos despejados); los fallos invocan la ira divina (rayos, monstruos).
 *   **🔥 Sacrificios y Ofrendas:** Arroja objetos valiosos frente al altar del Oráculo. La IA evalúa la rareza del ítem. Las ofrendas raras aumentan tu devoción; la basura te costará caro.
-*   **⚡ Control Absoluto del Entorno (RCON):** Interacción directa con la consola de Minecraft. El Oráculo altera el tiempo (`/time`), el clima (`/weather`), otorga pociones específicas (`/give`) y castiga (`/summon`) sin intervención del administrador.
+*   **⚡ Control Absoluto del Entorno (Consola del BDS):** Interacción directa con la consola de Minecraft. El Oráculo altera el tiempo (`/time`), el clima (`/weather`), otorga pociones específicas (`/give`) y castiga (`/summon`) sin intervención del administrador.
+
+---
+
+## 🎮 Cómo hablar con el Oráculo
+
+Dentro del juego, cualquier jugador (sin necesidad de trucos activados) usa el comando `/oraculo`:
+
+```
+/oraculo hola
+/oraculo dame un acertijo
+/oraculo dame tres manzanas
+/oraculo "¿dónde hay un bosque de cerezos?"
+```
+
+*   Sin comillas se aceptan hasta **8 palabras** y **ninguna cifra suelta**: Minecraft rechaza `/oraculo dame 3 manzanas` con un error de sintaxis. Escribe el número en letra o usa comillas: `/oraculo "dame 3 manzanas"`.
+*   Para mensajes largos o con signos raros, usa comillas.
+*   Si otro addon ya registró `/oraculo`, usa `/oraculo:oraculo`.
 
 ---
 
@@ -89,12 +108,7 @@ El sistema opera en dos frentes que se comunican en tiempo real:
     ```bash
     python main.py
     ```
-7.  **En el juego**, cualquier jugador puede hablar con el Oráculo:
-    ```
-    /oraculo dame un acertijo
-    /oraculo "¿dónde hay un bosque de cerezos?"
-    ```
-    Sin comillas se aceptan hasta 8 palabras (límite de parámetros del BDS) y **sin números sueltos**: Minecraft rechaza `/oraculo dame 3 manzanas` con un error de sintaxis antes de que llegue al Oráculo. Escribe `/oraculo dame tres manzanas` o `/oraculo "dame 3 manzanas"`. Para mensajes más largos, o si el juego marca cualquier error de sintaxis, usa comillas. Si otro addon ya usa `/oraculo`, escribe `/oraculo:oraculo`.
+7.  **Pruébalo en el juego** con `/oraculo hola` (ver [Cómo hablar con el Oráculo](#-cómo-hablar-con-el-oráculo)).
 
 ---
 

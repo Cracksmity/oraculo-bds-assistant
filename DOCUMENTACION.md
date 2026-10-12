@@ -116,24 +116,24 @@ Si te aburres del orden establecido, aquí hay algunas ideas para programar "Eas
 
 ## 5. Guía para Añadir Nuevos Secretos
 
-Para añadir más caprichos dictatoriales, intercepta el mensaje del jugador en el código ANTES de mandarlo a OpenAI. Así te ahorras la factura de la API y el castigo es instantáneo.
+Para añadir más caprichos dictatoriales, intercepta el mensaje del jugador en `process_chat_message` (`main.py`) ANTES de mandarlo a OpenAI. Así te ahorras la factura de la API y el castigo es instantáneo.
 
 ```python
 # ==========================================
 # SECCIÓN DE INTERCEPCIÓN / EASTER EGGS
 # ==========================================
-mensaje_lower = mensaje_jugador.lower()
+# query_clean_lower: el mensaje sin el prefijo, en minúsculas
+# player_clean: nombre del jugador
 
 # Easter Egg 1: El nombre prohibido
-if "herobrine" in mensaje_lower:
-    rcon_client.send_command("time set midnight")
-    rcon_client.send_command("weather thunder")
-    rcon_client.send_command(f"summon lightning_bolt {nombre_jugador}")
+if "herobrine" in query_clean_lower:
+    rcon_client.execute_command("time set midnight")
+    rcon_client.execute_command("weather thunder")
+    rcon_client.execute_command(f'execute at "{player_clean}" run summon lightning_bolt')
 
     # Mensaje sin gastar IA
-    rcon_client.send_command(f'tellraw @a {{"rawtext":[{{"text":"§dOráculo: §cHay nombres que no deben pronunciarse."}}]}}')
-
-    return jsonify({"status": "easter_egg_triggered", "action": "herobrine_punishment"}), 200
+    rcon_client.send_tellraw("@a", "§6[§5Oráculo§6] §cHay nombres que no deben pronunciarse.")
+    return
 ```
 
 Haz lo que quieras. Al final del día, el código es tuyo y la paciencia de tus jugadores es finita.
