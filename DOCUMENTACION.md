@@ -12,21 +12,20 @@ Bienvenido a las sagradas y absolutas escrituras. Este documento no es una simpl
 4. [Huevos de Pascua (Caprichos de Programador)](#4-huevos-de-pascua-caprichos-de-programador)
 5. [Guía para Añadir Nuevos Secretos](#5-guía-para-añadir-nuevos-secretos)
 6. [Apéndice Secreto: La Mecánica del "Favor Divino"](#🤫-apéndice-secreto-la-mecánica-del-favor-divino)
-7. [Problemas Conocidos (Rotura en BDS 1.26.30)](#⚠️-problemas-conocidos-rotura-en-bds-12630)
+7. [Problemas Conocidos (BDS 1.26.30+)](#⚠️-problemas-conocidos-bds-12630)
 
 ---
 
-## ⚠️ Problemas Conocidos (Rotura en BDS 1.26.30)
+## ⚠️ Problemas Conocidos (BDS 1.26.30+)
 
-> [!WARNING]
-> **Incompatibilidad con Minecraft BDS 1.26.30**
-> La actualización 1.26.30 introdujo cambios drásticos que eliminan o modifican sustancialmente las APIs Beta experimentales. Específicamente, el módulo `@minecraft/server-net` (utilizado por el `oraculo_bridge` para enviar peticiones HTTP al bot de Python) ha dejado de funcionar correctamente.
-> 
-> **Impacto:** El Oráculo ya no puede recibir eventos del chat ni de items soltados en el mundo. El sistema está **roto** en esta versión.
-> 
-> **Solución temporal:** Mantener el servidor en una versión estable anterior (como 1.21.x) hasta que Mojang estabilice las APIs y se lance un parche para este addon.
-> 
-> **Seguimiento del Bug:** Puedes seguir el reporte oficial en el portal de soporte de Mojang aquí: [BDS-23063](https://report.bugs.mojang.com/servicedesk/customer/portal/4/BDS-23063)
+> [!NOTE]
+> **Resuelto en la v1.1.0 del puente.** La rotura no venía de cambios en `@minecraft/server-net` en sí, sino de que esa API **solo existe como Beta**: obligaba a activar el experimento "Beta APIs" en el mundo, y desde BDS 1.26.30 los mundos con experimentos activos dejan a los jugadores atascados en *"Connecting to the server"* / *"Unable to join external servers"*.
+>
+> **Solución aplicada:** el `oraculo_bridge` ahora depende solo de `@minecraft/server@2.3.0` (estable). Los jugadores invocan al Oráculo con el comando `/oraculo <mensaje>` y el puente le habla a Python escribiendo líneas `ORACULO_IPC::{json}` en la consola del BDS, que `console_bridge.py` lee del `server.log`. Para quitar los experimentos de un mundo existente usa `tools/desactivar_experimentos.py` (ver README).
+>
+> **Si los jugadores siguen sin poder entrar** con el mundo ya sin experimentos, el problema es del propio BDS/cliente y sigue abierto en Mojang. Workarounds reportados: `enable-lan-visibility=true`, conectarse por IP numérica en vez de dominio, o probar `transport=raknet` / `transport=nethernet` en `server.properties`.
+>
+> **Seguimiento:** [BDS-23063](https://mojira.dev/BDS-23063), [MCPE-239705](https://mojira.dev/MCPE-239705), [BDS-23072](https://mojira.dev/BDS-23072), [BDS-23108](https://mojira.dev/BDS-23108).
 
 ---
 

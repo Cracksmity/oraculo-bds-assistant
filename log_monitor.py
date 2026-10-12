@@ -65,8 +65,15 @@ class LogMonitor:
                         self.read_from_end = False  # Solo la primera vez se salta el contenido
                     
                     while self._running:
+                        line_start = f.tell()
                         line = f.readline()
-                        
+
+                        # Línea a medio escribir por el servidor: esperar a que se complete
+                        if line and not line.endswith("\n"):
+                            f.seek(line_start)
+                            time.sleep(self.poll_interval)
+                            continue
+
                         if not line:
                             # No hay nuevas líneas. Validar si el archivo rotó o se truncó.
                             if not os.path.exists(self.file_path):

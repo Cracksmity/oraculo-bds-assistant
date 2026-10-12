@@ -1,14 +1,13 @@
 # 👁️ Oráculo BDS Assistant
 
-> [!WARNING]
-> **Incompatibilidad Crítica en BDS 1.26.30:** La actualización de Minecraft Bedrock Dedicated Server a la versión 1.26.30 ha roto temporalmente el funcionamiento de este addon. Los cambios en las APIs Beta experimentales (especialmente `@minecraft/server-net`) impiden la comunicación con el bot de Python. Por favor, **mantén tu servidor en una versión estable anterior (como 1.21.x)** hasta que haya una solución.
-> Puedes consultar el seguimiento del problema oficial aquí: [Reporte de bug BDS-23063](https://report.bugs.mojang.com/servicedesk/customer/portal/4/BDS-23063).
+> [!IMPORTANT]
+> **Compatible con BDS 1.26.30+ desde la v1.1.0.** La versión anterior dependía de `@minecraft/server-net`, que solo existe como API Beta. Desde BDS 1.26.30, los mundos con experimentos activos (Beta APIs) dejan a los jugadores atascados en *"Connecting to the server"* / *"Unable to join external servers"* ([BDS-23063](https://mojira.dev/BDS-23063), [MCPE-239705](https://mojira.dev/MCPE-239705)). El puente ahora usa **solo APIs estables** y se comunica con Python a través de la consola del servidor, así que el mundo **ya no necesita ningún experimento**. Ver [Migración desde la v1.0.x](#-migración-desde-la-v10x).
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
 ![Minecraft](https://img.shields.io/badge/Minecraft%20Bedrock-Dedicated%20Server-green)
 ![OpenAI](https://img.shields.io/badge/AI-OpenAI-orange)
 
-**Oráculo BDS Assistant** es un sistema de asistencia avanzado y misterioso impulsado por inteligencia artificial para servidores de Minecraft Bedrock (BDS). Diseñado con una arquitectura híbrida (Webhooks + RCON + OpenAI), este bot introduce una deidad interactiva en tu mundo: **El Oráculo**.
+**Oráculo BDS Assistant** es un sistema de asistencia avanzado y misterioso impulsado por inteligencia artificial para servidores de Minecraft Bedrock (BDS). Diseñado con una arquitectura híbrida (Consola del BDS + OpenAI), este bot introduce una deidad interactiva en tu mundo: **El Oráculo**.
 
 El Oráculo es capaz de entender lenguaje natural, juzgar las acciones de los jugadores, proponer acertijos, exigir sacrificios y, en última instancia, manipular el mismísimo clima y la vida en el servidor.
 
@@ -33,7 +32,8 @@ El sistema opera en dos frentes que se comunican en tiempo real:
 
 1.  **🧠 El Cerebro (Python - Servidor local/VPS):**
     Gestiona la lógica pesada, la IA y las respuestas.
-    *   `main.py`: El corazón del sistema. Coordina los endpoints de Webhook y los envíos por RCON.
+    *   `main.py`: El corazón del sistema. Recibe los mensajes del Behavior Pack y ejecuta comandos en la consola del BDS.
+    *   `console_bridge.py`: Lee el `server.log` y despacha las líneas `ORACULO_IPC::{json}` que escribe el Behavior Pack.
     *   `ai_handler.py`: Interfaz con OpenAI. Clasifica intenciones (charlas, clima, sacrificios, biomas) y moldea la personalidad del Oráculo.
     *   `biome_finder.py`: Sistema automatizado para el cálculo de distancias a biomas basado en la semilla del mundo.
     *   `rcon_client.py`: Puente asíncrono para inyectar comandos directamente en la consola del BDS.
@@ -41,9 +41,9 @@ El sistema opera en dos frentes que se comunican en tiempo real:
 
 2.  **👁️ Los Ojos y Oídos (JavaScript - Behavior Pack):**
     Ubicado en `oraculo_bridge/`. Se ejecuta dentro del mundo de Minecraft.
-    *   Captura eventos del chat (`beforeChatSend`).
-    *   Detecta ítems arrojados en el mundo (sacrificios).
-    *   Se comunica mediante peticiones HTTP (`@minecraft/server-net`) con el cerebro de Python.
+    *   Registra el comando `/oraculo <mensaje>` (API estable de comandos personalizados).
+    *   Detecta conexiones de jugadores, ofrendas en el altar y valida el tamaño de biomas.
+    *   Se comunica con Python escribiendo líneas `ORACULO_IPC::{json}` en la consola del servidor (sin HTTP ni Beta APIs).
 
 ---
 
@@ -51,11 +51,8 @@ El sistema opera en dos frentes que se comunican en tiempo real:
 
 ### Requisitos Previos
 *   Python 3.8 o superior.
-*   Servidor Bedrock Dedicated Server (BDS) con **Beta APIs habilitadas**.
-    *   Restricción técnica de compatibilidad estable: el puente `scripts/main.js` fue probado contra `@minecraft/server@2.8.0-beta` y `@minecraft/server-net@1.0.0-beta`.
-    *   Cambiar esas versiones puede romper eventos de chat/HTTP y cortar la comunicación con Python.
-    *   Mantén esas versiones en `oraculo_bridge/manifest.json` hasta validar una migración completa en un entorno de pruebas.
-*   Acceso a RCON activado en `server.properties` (`enable-rcon=true`).
+*   Bedrock Dedicated Server (BDS) **1.21.120 o superior**, sin experimentos. El puente usa `@minecraft/server@2.3.0` (estable).
+*   El BDS debe correr dentro de una sesión `screen` (Linux) y su salida debe guardarse en un archivo (`SERVER_LOG_FILE`). Bedrock no tiene RCON: el bot escribe los comandos en esa sesión y lee el log.
 *   Una API Key válida de [OpenAI](https://platform.openai.com/).
 
 ### Instalación Paso a Paso
@@ -76,19 +73,41 @@ El sistema opera en dos frentes que se comunican en tiempo real:
     ADMIN_PLAYERS=tu_nombre_de_jugador
     DIVINE_FAVOR_PLAYERS=jugador_VIP1,jugador_VIP2
 
-    # Configuración de RCON
-    RCON_HOST=127.0.0.1
-    RCON_PORT=25575
-    RCON_PASSWORD=tu_password_fuerte
+    # Consola del BDS
+    SCREEN_SESSION_NAME=minecraft
+    SERVER_LOG_FILE=/ruta/al/servidor/server.log
     ```
 4.  **Instala el Behavior Pack:**
     *   Copia la carpeta `oraculo_bridge/` dentro de la carpeta `behavior_packs` de tu BDS.
-    *   Aplica el pack al mundo y **activa las opciones de experimentación necesarias** (Beta APIs / Scripts).
-    *   *Nota:* Asegúrate de que el archivo `scripts/main.js` del addon apunte a la IP y puerto correctos de tu servidor Python (por defecto `http://127.0.0.1:5000`).
-5.  **Despierta al Oráculo:**
+    *   Agrega el pack en `worlds/<mundo>/world_behavior_packs.json` con `"version": [1, 1, 0]`. **No** actives ningún experimento.
+5.  **Arranca el BDS guardando su salida en el log** (el `logfile flush 1` hace que el log se escriba casi al instante, el valor por defecto es cada 10 s):
+    ```bash
+    echo "logfile flush 1" >> ~/.screenrc
+    screen -dmS minecraft -L -Logfile server.log ./bedrock_server
+    ```
+6.  **Despierta al Oráculo:**
     ```bash
     python main.py
     ```
+7.  **En el juego**, cualquier jugador puede hablar con el Oráculo:
+    ```
+    /oraculo dame un acertijo
+    /oraculo "¿dónde hay un bosque de cerezos?"
+    ```
+    Si el texto tiene signos raros y el juego marca error de sintaxis, ponlo entre comillas. Si otro addon ya usa `/oraculo`, escribe `/oraculo:oraculo`.
+
+---
+
+## 🔄 Migración desde la v1.0.x
+
+1.  Reemplaza la carpeta `oraculo_bridge/` del servidor por la nueva y actualiza la versión en `world_behavior_packs.json` a `[1, 1, 0]`.
+2.  Con el servidor **apagado**, desactiva los experimentos del mundo (el juego no permite apagarlos una vez activados). El script guarda una copia de seguridad del `level.dat`:
+    ```bash
+    python tools/desactivar_experimentos.py "/ruta/al/servidor/worlds/Mi Mundo" --dry-run
+    python tools/desactivar_experimentos.py "/ruta/al/servidor/worlds/Mi Mundo"
+    ```
+    ⚠️ Cualquier otro addon que requiera Beta APIs dejará de funcionar.
+3.  Ya no se usa `!oraculo` en el chat (el evento de chat sigue siendo Beta): ahora es `/oraculo <mensaje>`. El bot ya no abre un servidor HTTP; si por alguna razón sigues usando el pack viejo, pon `ENABLE_WEBHOOK=True` en el `.env`.
 
 ---
 

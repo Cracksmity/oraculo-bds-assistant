@@ -2,10 +2,10 @@
   "format_version": 2,
   "header": {
     "name": "Oráculo Bridge",
-    "description": "Puente de comunicación entre el chat de Minecraft Bedrock y el bot Oráculo. Captura mensajes del chat y eventos de jugadores, y los reenvía al bot via HTTP.",
+    "description": "Puente entre Minecraft Bedrock y el bot Oráculo. Registra el comando /oraculo y reenvía comandos y eventos de jugadores al bot a través de la consola del servidor. No requiere Beta APIs.",
     "uuid": "7f8e9d0c-1b2a-4c3d-8e5f-6a7b8c9d0e1f",
-    "version": [1, 0, 2],
-    "min_engine_version": [1, 21, 0]
+    "version": [1, 1, 0],
+    "min_engine_version": [1, 21, 120]
   },
   "modules": [
     {
@@ -13,17 +13,13 @@
       "language": "javascript",
       "uuid": "3a4b5c6d-7e8f-4a9b-8c1d-2e3f4a5b6c7d",
       "entry": "scripts/main.js",
-      "version": [1, 0, 2]
+      "version": [1, 1, 0]
     }
   ],
   "dependencies": [
     {
       "module_name": "@minecraft/server",
-      "version": "2.8.0"
-    },
-    {
-      "module_name": "@minecraft/server-net",
-      "version": "1.0.0-beta"
+      "version": "2.3.0"
     }
   ]
 }
