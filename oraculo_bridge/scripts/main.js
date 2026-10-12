@@ -53,10 +53,11 @@ function sendToBot(endpoint, data) {
 
 // ─── Comando /oraculo (API estable) ────────────────────────────
 // Los parámetros String de Bedrock solo capturan una palabra, así que
-// se registran varios opcionales y se unen. También acepta comillas:
+// se registran varios opcionales (máx. 8, límite del BDS) y se unen.
+// Para mensajes más largos se usan comillas:
 //   /oraculo dame 5 diamantes
 //   /oraculo "¿dónde hay un bosque de cerezos?"
-const MAX_COMMAND_WORDS = 16;
+const MAX_COMMAND_WORDS = 8; // límite de parámetros por comando en BDS
 
 system.beforeEvents.startup.subscribe(({ customCommandRegistry }) => {
   const optionalParameters = [];

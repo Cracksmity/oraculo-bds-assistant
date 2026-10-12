@@ -51,7 +51,7 @@ El sistema opera en dos frentes que se comunican en tiempo real:
 
 ### Requisitos Previos
 *   Python 3.8 o superior.
-*   Bedrock Dedicated Server (BDS) **1.21.120 o superior**, sin experimentos. El puente usa `@minecraft/server@2.3.0` (estable).
+*   Bedrock Dedicated Server (BDS) **1.21.120 o superior**, sin experimentos. Desde 1.26.5x el BDS solo acepta `transport=nethernet` en `server.properties`. El puente usa `@minecraft/server@2.3.0` (estable).
 *   El BDS debe correr dentro de una sesión `screen` (Linux) y su salida debe guardarse en un archivo (`SERVER_LOG_FILE`). Bedrock no tiene RCON: el bot escribe los comandos en esa sesión y lee el log.
 *   Una API Key válida de [OpenAI](https://platform.openai.com/).
 
@@ -94,7 +94,7 @@ El sistema opera en dos frentes que se comunican en tiempo real:
     /oraculo dame un acertijo
     /oraculo "¿dónde hay un bosque de cerezos?"
     ```
-    Si el texto tiene signos raros y el juego marca error de sintaxis, ponlo entre comillas. Si otro addon ya usa `/oraculo`, escribe `/oraculo:oraculo`.
+    Sin comillas se aceptan hasta 8 palabras (límite de parámetros del BDS); para mensajes más largos, o si el juego marca error de sintaxis, ponlo entre comillas. Si otro addon ya usa `/oraculo`, escribe `/oraculo:oraculo`.
 
 ---
 

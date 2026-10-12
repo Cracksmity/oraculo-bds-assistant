@@ -23,7 +23,7 @@ Bienvenido a las sagradas y absolutas escrituras. Este documento no es una simpl
 >
 > **Solución aplicada:** el `oraculo_bridge` ahora depende solo de `@minecraft/server@2.3.0` (estable). Los jugadores invocan al Oráculo con el comando `/oraculo <mensaje>` y el puente le habla a Python escribiendo líneas `ORACULO_IPC::{json}` en la consola del BDS, que `console_bridge.py` lee del `server.log`. Para quitar los experimentos de un mundo existente usa `tools/desactivar_experimentos.py` (ver README).
 >
-> **Si los jugadores siguen sin poder entrar** con el mundo ya sin experimentos, el problema es del propio BDS/cliente y sigue abierto en Mojang. Workarounds reportados: `enable-lan-visibility=true`, conectarse por IP numérica en vez de dominio, o probar `transport=raknet` / `transport=nethernet` en `server.properties`.
+> **Si los jugadores siguen sin poder entrar** con el mundo ya sin experimentos, el problema es del propio BDS/cliente y sigue abierto en Mojang. Workarounds reportados: `enable-lan-visibility=true` o conectarse por IP numérica en vez de dominio. Desde BDS 1.26.5x usa `transport=nethernet` (con `raknet` el servidor avisa que nadie podrá conectarse).
 >
 > **Seguimiento:** [BDS-23063](https://mojira.dev/BDS-23063), [MCPE-239705](https://mojira.dev/MCPE-239705), [BDS-23072](https://mojira.dev/BDS-23072), [BDS-23108](https://mojira.dev/BDS-23108).
 
