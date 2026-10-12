@@ -110,6 +110,17 @@ El sistema opera en dos frentes que se comunican en tiempo real:
     ```
 7.  **Pruébalo en el juego** con `/oraculo hola` (ver [Cómo hablar con el Oráculo](#-cómo-hablar-con-el-oráculo)).
 
+### 🛡️ Vigilante de NetherNet (recomendado)
+
+Con `transport=nethernet`, el BDS depende de una conexión con el servicio de señalización de Microsoft. A veces esa conexión se cae sin dejar rastro en el log: el servidor sigue corriendo, pero nadie nuevo puede entrar (`InitialConnection-13`). `tools/vigilante_bds.sh` lo detecta (el BDS deja de escuchar en TCP `server-port`) y reinicia el servidor con un aviso de 30 s a los jugadores. No actúa si el servidor está apagado a propósito, si arrancó hace menos de 3 minutos o si hay un respaldo en curso, y como máximo reinicia una vez cada 15 minutos.
+
+```bash
+bash tools/vigilante_bds.sh estado      # diagnóstico, no reinicia nada
+bash tools/vigilante_bds.sh instalar    # revisión cada 5 min en el crontab
+```
+
+El registro queda en `~/vigilante_bds.log`.
+
 ---
 
 ## 🔄 Migración desde la v1.0.x
