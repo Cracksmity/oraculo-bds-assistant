@@ -1,4 +1,11 @@
-# 👁️ Oráculo BDS Assistant
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+    <img src="assets/logo.svg" alt="Oráculo BDS" width="140">
+  </picture>
+</p>
+
+# Oráculo BDS Assistant
 
 > [!TIP]
 > **✅ Funcionando de nuevo (v1.1.0), probado en BDS 1.26.52 en octubre de 2026.**
