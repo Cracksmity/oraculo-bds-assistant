@@ -1524,7 +1524,7 @@ def process_riddle_request(player: str) -> None:
     active_riddle_timer.start()
     
     msg_riddle = f"§6[§5Oráculo§6] §e§lENIGMA DIVINO: §d{riddle_data['riddle']}"
-    msg_instruct = "§6[§5Oráculo§6] §7(Usa '!oraculo responder <palabra>'. Tienen 2 minutos)"
+    msg_instruct = "§6[§5Oráculo§6] §7(Responde con /oraculo responder <palabra>, o pide ayuda con /oraculo pista. Tienen 2 minutos)"
     try:
         rcon_client.send_tellraw("@a", msg_riddle)
         rcon_client.send_tellraw("@a", msg_instruct)
